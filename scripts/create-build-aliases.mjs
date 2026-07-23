@@ -1,11 +1,11 @@
-import { copyFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+const indexHtml = join(process.cwd(), "dist", "index.html");
 const assetsDir = join(process.cwd(), "dist", "assets");
-const appJs = join(assetsDir, "app.js");
-const appCss = join(assetsDir, "app.css");
 
 const legacyJsNames = [
+  "app.js",
   "index-D8_a3vgC.js",
   "index-Casb6aft.js",
   "index-CBn0JtyE.js",
@@ -14,18 +14,27 @@ const legacyJsNames = [
 ];
 
 const legacyCssNames = [
+  "app.css",
   "index-BbIEwdTk.css",
   "index-CGf_GA8E.css",
   "index-CTHirLAQ.css"
 ];
 
-if (existsSync(appJs)) {
+const html = existsSync(indexHtml) ? readFileSync(indexHtml, "utf8") : "";
+const currentJs = html.match(/assets\/[^"']+\.js/)?.[0];
+const currentCss = html.match(/assets\/[^"']+\.css/)?.[0];
+
+if (currentJs && existsSync(join(process.cwd(), "dist", currentJs))) {
+  const appJs = join(process.cwd(), "dist", currentJs);
+
   for (const fileName of legacyJsNames) {
     copyFileSync(appJs, join(assetsDir, fileName));
   }
 }
 
-if (existsSync(appCss)) {
+if (currentCss && existsSync(join(process.cwd(), "dist", currentCss))) {
+  const appCss = join(process.cwd(), "dist", currentCss);
+
   for (const fileName of legacyCssNames) {
     copyFileSync(appCss, join(assetsDir, fileName));
   }
