@@ -1,6 +1,6 @@
 const DEFAULT_SUPABASE_URL = "https://unyeguxmctujtvrlinfa.supabase.co";
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_SoBoYKDjeKVgrX8arJ23Cg_DVOzo29S";
-const DEFAULT_TABLE_NAME = "sc2_app_state";
+const DEFAULT_TABLE_NAME = "app_state";
 const APP_STATE_ID = "corp-command";
 
 const supabaseUrl = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL);
@@ -15,7 +15,7 @@ export function isSupabaseConfigured() {
 
 export async function loadRemoteState() {
   const rows = await supabaseRequest(
-    `${tableName}?id=eq.${encodeURIComponent(APP_STATE_ID)}&select=payload,updated_at`,
+    `${tableName}?id=eq.${encodeURIComponent(APP_STATE_ID)}&select=data,updated_at`,
     {
       headers: {
         Accept: "application/json"
@@ -23,7 +23,7 @@ export async function loadRemoteState() {
     }
   );
 
-  return rows?.[0]?.payload || null;
+  return rows?.[0]?.data || null;
 }
 
 export async function saveRemoteState(payload) {
@@ -34,12 +34,12 @@ export async function saveRemoteState(payload) {
     },
     body: JSON.stringify({
       id: APP_STATE_ID,
-      payload,
+      data: payload,
       updated_at: new Date().toISOString()
     })
   });
 
-  return rows?.[0]?.payload || payload;
+  return rows?.[0]?.data || payload;
 }
 
 async function supabaseRequest(path, options = {}) {
