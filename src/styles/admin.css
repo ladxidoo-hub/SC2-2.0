@@ -139,6 +139,24 @@
   background: rgba(155, 255, 87, 0.08);
 }
 
+.admin-brand-status.is-online {
+  color: var(--green);
+  border-color: rgba(155, 255, 87, 0.5);
+  background: rgba(155, 255, 87, 0.12);
+}
+
+.admin-brand-status.is-syncing {
+  color: var(--cyan);
+  border-color: rgba(68, 211, 255, 0.42);
+  background: rgba(68, 211, 255, 0.1);
+}
+
+.admin-brand-status.is-local {
+  color: var(--gold);
+  border-color: rgba(255, 216, 104, 0.45);
+  background: rgba(255, 216, 104, 0.1);
+}
+
 .admin-nav-list {
   display: grid;
   gap: 10px;

@@ -2,6 +2,9 @@ node_modules/
 dist/
 .agents/
 .codex/
+.env
+.env.local
+.env.*.local
 .DS_Store
 npm-debug.log*
 *.zip

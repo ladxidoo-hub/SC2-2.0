@@ -28,3 +28,15 @@ Para publicar:
 3. Haz push a la rama `main`.
 
 El workflow `.github/workflows/deploy.yml` instala dependencias, ejecuta `npm run build` y publica `dist/`.
+
+## Supabase
+
+El panel Admin usa Supabase como almacenamiento remoto mediante `src/services/supabaseStore.js`.
+
+Antes de usarlo en produccion, abre Supabase SQL Editor y ejecuta:
+
+```sql
+-- supabase/schema.sql
+```
+
+La clave publishable es publica y puede vivir en el frontend. No subas claves secretas ni claves de servicio al repositorio.

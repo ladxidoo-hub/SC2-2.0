@@ -1,3 +1,5 @@
+import { isSupabaseConfigured, loadRemoteState, saveRemoteState } from "../services/supabaseStore.js";
+
 const STORAGE_KEY = "eveEchoesCorpCommand.v1";
 const ADMIN_PASSWORD = "anlaporura";
 const ADMIN_AUTH_KEY = "sc2.admin.unlocked";
@@ -58,7 +60,7 @@ function renderAdminPanel() {
         <div class="admin-brand">
           <span class="admin-brand-kicker">EVE Echoes</span>
           <h1>Corp Command</h1>
-          <span class="admin-brand-status">Offline / LocalStorage</span>
+          <span class="admin-brand-status" data-admin-sync-status>Conectando BD</span>
         </div>
 
         <nav class="admin-nav-list">
@@ -175,7 +177,9 @@ function initAdminPanel(main) {
     members: [],
     currentView: "dashboard",
     searchTerm: "",
-    expandedMembers: new Set()
+    expandedMembers: new Set(),
+    syncStatus: isSupabaseConfigured() ? "connecting" : "local",
+    syncMessage: isSupabaseConfigured() ? "Conectando BD" : "LocalStorage"
   };
 
   const els = {
@@ -193,13 +197,14 @@ function initAdminPanel(main) {
     modalTitle: main.querySelector("#adminModalTitle"),
     modalBody: main.querySelector("#adminModalBody"),
     modalFooter: main.querySelector("#adminModalFooter"),
+    syncStatus: main.querySelector("[data-admin-sync-status]"),
     toastStack: main.querySelector("#adminToastStack"),
     navButtons: Array.from(main.querySelectorAll("[data-admin-view]"))
   };
 
-  loadData();
   bindEvents();
   render();
+  void loadData();
 
   return () => {
     controller.abort();
@@ -238,33 +243,93 @@ function initAdminPanel(main) {
     }, { signal });
   }
 
-  function loadData() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) {
-        state.members = [];
-        return;
-      }
+  async function loadData() {
+    let localPayload = null;
 
-      state.members = readMembersFromPayload(JSON.parse(raw));
-      persistData(false);
+    try {
+      localPayload = readLocalPayload();
+      if (localPayload) {
+        state.members = readMembersFromPayload(localPayload);
+        render();
+      }
     } catch (error) {
       console.error(error);
       state.members = [];
-      showToast("No se pudo leer el almacenamiento local.");
+      showToast("No se pudo leer el respaldo local.");
+    }
+
+    if (!isSupabaseConfigured()) {
+      setSyncStatus("local", "LocalStorage");
+      if (!localPayload) {
+        state.members = [];
+        render();
+      }
+      return;
+    }
+
+    setSyncStatus("connecting", "Conectando BD");
+
+    try {
+      const remotePayload = await loadRemoteState();
+
+      if (remotePayload) {
+        state.members = readMembersFromPayload(remotePayload);
+        persistLocalPayload(buildBackupPayload());
+        setSyncStatus("online", "Online / Supabase");
+        render();
+        return;
+      }
+
+      if (state.members.length) {
+        await saveRemoteState(buildBackupPayload());
+      }
+
+      setSyncStatus("online", "Online / Supabase");
+      render();
+    } catch (error) {
+      console.error(error);
+      setSyncStatus("local", "LocalStorage / sin BD");
+      if (!localPayload) {
+        state.members = [];
+        render();
+      }
+      showToast("Supabase no esta listo. Usando respaldo local.");
     }
   }
 
   function persistData(showSavedToast = true) {
+    const payload = buildBackupPayload();
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(buildBackupPayload()));
-      if (showSavedToast) {
+      persistLocalPayload(payload);
+      if (showSavedToast && !isSupabaseConfigured()) {
         showToast("Datos guardados localmente.");
       }
     } catch (error) {
       console.error(error);
       showToast("El navegador no permitio guardar en LocalStorage.");
     }
+
+    if (!isSupabaseConfigured()) {
+      setSyncStatus("local", "LocalStorage");
+      return;
+    }
+
+    setSyncStatus("syncing", "Sincronizando");
+    saveRemoteState(payload)
+      .then(() => {
+        setSyncStatus("online", "Online / Supabase");
+        if (showSavedToast) {
+          showToast("Datos sincronizados en Supabase.");
+        }
+      })
+      .catch((error) => {
+        console.error(error);
+        setSyncStatus("local", "LocalStorage / sin BD");
+        if (showSavedToast) {
+          showToast("Guardado local. Supabase no respondio.");
+        }
+      });
   }
 
   function buildBackupPayload() {
@@ -277,6 +342,7 @@ function initAdminPanel(main) {
   }
 
   function render() {
+    updateSyncStatus();
     renderNavigation();
     renderCounters();
 
@@ -289,6 +355,32 @@ function initAdminPanel(main) {
     const config = STATUS_CONFIG[state.currentView];
     els.viewTitle.textContent = config.title;
     renderRoster(state.currentView);
+  }
+
+  function readLocalPayload() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }
+
+  function persistLocalPayload(payload) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  }
+
+  function setSyncStatus(status, message) {
+    state.syncStatus = status;
+    state.syncMessage = message;
+    updateSyncStatus();
+  }
+
+  function updateSyncStatus() {
+    if (!els.syncStatus) {
+      return;
+    }
+
+    els.syncStatus.textContent = state.syncMessage;
+    els.syncStatus.classList.toggle("is-online", state.syncStatus === "online");
+    els.syncStatus.classList.toggle("is-syncing", state.syncStatus === "syncing" || state.syncStatus === "connecting");
+    els.syncStatus.classList.toggle("is-local", state.syncStatus === "local");
   }
 
   function renderNavigation() {
