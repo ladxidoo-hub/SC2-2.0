@@ -2,11 +2,13 @@ import "./styles/base.css";
 import "./styles/home.css";
 import "./styles/rules.css";
 import "./styles/roles.css";
+import "./styles/guides.css";
 import "./styles/admin.css";
 
 import { renderHome, initHome } from "./views/home.js";
 import { renderRules, initRules } from "./views/rules.js";
 import { renderRoles, initRoles } from "./views/roles.js";
+import { renderGuides, initGuides } from "./views/guides.js";
 import { renderAdmin, initAdmin } from "./views/admin.js";
 
 const routes = {
@@ -27,6 +29,12 @@ const routes = {
     title: "Biblioteca de Roles",
     render: renderRoles,
     init: initRoles
+  },
+  guias: {
+    label: "Guias",
+    title: "Guias del Enjambre",
+    render: renderGuides,
+    init: initGuides
   },
   admin: {
     label: "Admin",

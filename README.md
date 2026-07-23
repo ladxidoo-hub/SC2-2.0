@@ -31,12 +31,14 @@ El workflow `.github/workflows/deploy.yml` instala dependencias, ejecuta `npm ru
 
 ## Supabase
 
-El panel Admin usa Supabase como almacenamiento remoto mediante `src/services/supabaseStore.js`.
+El panel Admin y la biblioteca de guias usan Supabase como almacenamiento remoto mediante `src/services/supabaseStore.js`.
 
 Antes de usarlo en produccion, abre Supabase SQL Editor y ejecuta:
 
 ```sql
 -- supabase/schema.sql
 ```
+
+La tabla `app_state` guarda dos documentos publicos de la app: `corp-command` para miembros y `guides-library` para guias.
 
 La clave publishable es publica y puede vivir en el frontend. No subas claves secretas ni claves de servicio al repositorio.

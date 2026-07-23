@@ -2,6 +2,7 @@ const DEFAULT_SUPABASE_URL = "https://unyeguxmctujtvrlinfa.supabase.co";
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_SoBoYKDjeKVgrX8arJ23Cg_DVOzo29S";
 const DEFAULT_TABLE_NAME = "app_state";
 const APP_STATE_ID = "corp-command";
+const GUIDES_STATE_ID = "guides-library";
 
 const supabaseUrl = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL);
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
@@ -13,9 +14,10 @@ export function isSupabaseConfigured() {
   return Boolean(supabaseUrl && publishableKey);
 }
 
-export async function loadRemoteState() {
+export async function loadAppState(recordId = APP_STATE_ID) {
+  const safeRecordId = normalizeRecordId(recordId);
   const rows = await supabaseRequest(
-    `${tableName}?id=eq.${encodeURIComponent(APP_STATE_ID)}&select=data,updated_at`,
+    `${tableName}?id=eq.${encodeURIComponent(safeRecordId)}&select=data,updated_at`,
     {
       headers: {
         Accept: "application/json"
@@ -26,20 +28,37 @@ export async function loadRemoteState() {
   return rows?.[0]?.data || null;
 }
 
-export async function saveRemoteState(payload) {
+export async function saveAppState(recordId = APP_STATE_ID, payload = {}) {
+  const safeRecordId = normalizeRecordId(recordId);
   const rows = await supabaseRequest(tableName, {
     method: "POST",
     headers: {
       Prefer: "resolution=merge-duplicates,return=representation"
     },
     body: JSON.stringify({
-      id: APP_STATE_ID,
+      id: safeRecordId,
       data: payload,
       updated_at: new Date().toISOString()
     })
   });
 
   return rows?.[0]?.data || payload;
+}
+
+export async function loadRemoteState() {
+  return loadAppState(APP_STATE_ID);
+}
+
+export async function saveRemoteState(payload) {
+  return saveAppState(APP_STATE_ID, payload);
+}
+
+export async function loadGuidesState() {
+  return loadAppState(GUIDES_STATE_ID);
+}
+
+export async function saveGuidesState(payload) {
+  return saveAppState(GUIDES_STATE_ID, payload);
 }
 
 async function supabaseRequest(path, options = {}) {
@@ -74,4 +93,14 @@ function normalizeSupabaseUrl(value) {
     .trim()
     .replace(/\/rest\/v1\/?$/i, "")
     .replace(/\/+$/, "");
+}
+
+function normalizeRecordId(value) {
+  const recordId = String(value || "").trim();
+
+  if (!recordId) {
+    throw new Error("El documento de Supabase no es valido.");
+  }
+
+  return recordId;
 }
