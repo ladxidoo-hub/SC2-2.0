@@ -128,6 +128,28 @@ export function renderHome() {
         </div>
       </section>
 
+      <section class="home-section external-tools" aria-labelledby="external-tools-title">
+        <div class="section-shell">
+          <div class="section-heading compact">
+            <p class="eyebrow">Herramientas externas</p>
+            <h2 id="external-tools-title">Accesos rapidos para operaciones</h2>
+          </div>
+
+          <div class="external-tools-grid">
+            <a class="module-tile external-tool-tile" href="https://discordtimestamp.com/" target="_blank" rel="noopener noreferrer">
+              <span class="module-kicker">EXT-01</span>
+              <strong>Discord Timestamp</strong>
+              <span>Generador de horarios para publicar tiempos exactos en Discord.</span>
+            </a>
+            <a class="module-tile external-tool-tile" href="https://echoes.eveeye.com/?m=Pure%20Blind&o=nodeout_sec,node_sec,sub_npcs,sector_none,tag_none,etag_sig,con_none,thera,dark" target="_blank" rel="noopener noreferrer">
+              <span class="module-kicker">EXT-02</span>
+              <strong>EVE Echoes Eye</strong>
+              <span>Mapa tactico de Pure Blind para rutas, sistemas y lectura regional.</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
       <section class="home-section enlist-section" id="reclutamiento" aria-labelledby="enlist-title">
         <div class="section-shell enlist-layout">
           <div class="section-heading">
