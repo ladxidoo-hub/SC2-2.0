@@ -2,6 +2,7 @@ import { isSupabaseConfigured, loadEventsState, saveEventsState } from "../servi
 
 const STORAGE_KEY = "sc2.communityEvents.v1";
 const ADMIN_AUTH_KEY = "sc2.admin.unlocked";
+const COUNTDOWN_REFRESH_MS = 30 * 1000;
 
 const CATEGORIES = [
   {
@@ -154,6 +155,7 @@ export function initEvents({ main, anchor }) {
   const controller = new AbortController();
   const { signal } = controller;
   let activeModalCleanup = null;
+  const countdownTimerId = window.setInterval(refreshDynamicTimes, COUNTDOWN_REFRESH_MS);
 
   const state = {
     members: [],
@@ -197,6 +199,7 @@ export function initEvents({ main, anchor }) {
 
   return () => {
     activeModalCleanup?.();
+    window.clearInterval(countdownTimerId);
     controller.abort();
     if (els.modal.open) {
       els.modal.close();
@@ -443,6 +446,7 @@ export function initEvents({ main, anchor }) {
     renderCategoryNav();
     renderEventsList();
     renderMembers();
+    refreshDynamicTimes();
   }
 
   function updateEditorControls() {
@@ -453,6 +457,40 @@ export function initEvents({ main, anchor }) {
     if (els.adminLink) {
       els.adminLink.hidden = state.isAdmin;
     }
+  }
+
+  function refreshDynamicTimes() {
+    main.querySelectorAll("[data-events-local-time]").forEach((node) => {
+      const value = node.dataset.eventsLocalTime;
+      node.textContent = formatDate(value);
+      node.setAttribute("datetime", value || "");
+    });
+
+    main.querySelectorAll("[data-events-countdown]").forEach((node) => {
+      const record = findEvent(node.dataset.eventId);
+      const meta = getCountdownMeta(record || {
+        startsAt: node.dataset.startsAt,
+        status: node.dataset.status
+      });
+
+      node.textContent = meta.label;
+      node.classList.toggle("is-planned", meta.className === "is-planned");
+      node.classList.toggle("is-active", meta.className === "is-active");
+      node.classList.toggle("is-finished", meta.className === "is-finished");
+    });
+
+    main.querySelectorAll("[data-events-runtime-status]").forEach((node) => {
+      const record = findEvent(node.dataset.eventId);
+      if (!record) {
+        return;
+      }
+
+      const meta = getEventStatusMeta(record);
+      node.textContent = meta.label;
+      node.classList.toggle("is-planned", meta.className === "is-planned");
+      node.classList.toggle("is-active", meta.className === "is-active");
+      node.classList.toggle("is-finished", meta.className === "is-finished");
+    });
   }
 
   function renderPublicParticipation() {
@@ -633,7 +671,8 @@ export function initEvents({ main, anchor }) {
 
   function renderEventCard(record) {
     const category = CATEGORY_BY_ID[record.category] || getActiveCategory();
-    const status = getEventStatusMeta(record.status);
+    const status = getEventStatusMeta(record);
+    const countdown = getCountdownMeta(record);
     const participants = record.participantIds.map(getMemberName).filter(Boolean);
     const previewNames = participants.slice(0, 4).join(", ");
     const extraCount = Math.max(0, participants.length - 4);
@@ -645,8 +684,13 @@ export function initEvents({ main, anchor }) {
             <span class="events-event-tag">${escapeHtml(category.tag)}</span>
             <div>
               <h3>${escapeHtml(record.name)}</h3>
-              <span class="events-status-badge ${escapeAttr(status.className)}">${escapeHtml(status.label)}</span>
-              <time datetime="${escapeAttr(record.startsAt)}">${escapeHtml(formatDate(record.startsAt))}</time>
+              <div class="events-time-row">
+                <span class="events-status-badge ${escapeAttr(status.className)}" data-events-runtime-status data-event-id="${escapeAttr(record.uid)}">${escapeHtml(status.label)}</span>
+                <time datetime="${escapeAttr(record.startsAt)}" data-events-local-time="${escapeAttr(record.startsAt)}">${escapeHtml(formatDate(record.startsAt))}</time>
+              </div>
+              <span class="events-countdown ${escapeAttr(countdown.className)}" data-events-countdown data-event-id="${escapeAttr(record.uid)}" data-starts-at="${escapeAttr(record.startsAt)}" data-status="${escapeAttr(record.status)}">
+                ${escapeHtml(countdown.label)}
+              </span>
             </div>
           </div>
           <p>${escapeHtml(record.description || "Sin descripción.")}</p>
@@ -673,7 +717,7 @@ export function initEvents({ main, anchor }) {
   }
 
   function renderEventLifecycleButton(record) {
-    const status = normalizeEventStatus(record.status);
+    const status = getEventRuntimeStatus(record);
     const lifecycleAction = status === "active" ? "finish-event" : "start-event";
     const lifecycleLabel = status === "active" ? "Finalizar" : "Iniciar";
 
@@ -981,8 +1025,9 @@ export function initEvents({ main, anchor }) {
             <input id="eventsEventName" name="name" type="text" value="${escapeAttr(record.name)}" required>
           </div>
           <div class="events-form-field">
-            <label for="eventsEventStartsAt">Fecha y hora</label>
+            <label for="eventsEventStartsAt">Fecha y hora local</label>
             <input id="eventsEventStartsAt" name="startsAt" type="datetime-local" value="${escapeAttr(formatDateForInput(record.startsAt))}" required>
+            <p class="events-form-hint">Zona detectada: ${escapeHtml(getLocalTimeZoneLabel())}. Al guardar se almacena como UTC.</p>
           </div>
           <div class="events-form-field">
             <label>Categoría</label>
@@ -1013,7 +1058,7 @@ export function initEvents({ main, anchor }) {
     const name = String(formData.get("name") || "").trim();
     const startsAtInput = String(formData.get("startsAt") || "").trim();
     const description = String(formData.get("description") || "").trim();
-    const startsAt = parseDateTimeLocal(startsAtInput);
+    const startsAt = parseLocalDateTimeToUtc(startsAtInput);
 
     if (!name) {
       return { ok: false, message: "El nombre del evento es obligatorio." };
@@ -1043,7 +1088,8 @@ export function initEvents({ main, anchor }) {
     }
 
     const category = CATEGORY_BY_ID[record.category] || getActiveCategory();
-    const status = getEventStatusMeta(record.status);
+    const status = getEventStatusMeta(record);
+    const countdown = getCountdownMeta(record);
     const participants = getMembersByIds(record.participantIds);
 
     openModal({
@@ -1057,7 +1103,15 @@ export function initEvents({ main, anchor }) {
           </div>
           <div class="events-detail-block">
             <span>Fecha</span>
-            <strong>${escapeHtml(formatDate(record.startsAt))}</strong>
+            <strong>
+              <time datetime="${escapeAttr(record.startsAt)}" data-events-local-time="${escapeAttr(record.startsAt)}">${escapeHtml(formatDate(record.startsAt))}</time>
+            </strong>
+          </div>
+          <div class="events-detail-block">
+            <span>Temporizador</span>
+            <strong class="events-countdown ${escapeAttr(countdown.className)}" data-events-countdown data-event-id="${escapeAttr(record.uid)}" data-starts-at="${escapeAttr(record.startsAt)}" data-status="${escapeAttr(record.status)}">
+              ${escapeHtml(countdown.label)}
+            </strong>
           </div>
           <div class="events-detail-block">
             <span>Participantes</span>
@@ -1460,7 +1514,9 @@ export function initEvents({ main, anchor }) {
       record.name,
       record.description,
       CATEGORY_BY_ID[record.category]?.label,
-      getEventStatusMeta(record.status).label,
+      getEventStatusMeta(record).label,
+      formatDate(record.startsAt),
+      getCountdownMeta(record).label,
       participantNames
     ].join(" ")).includes(term);
   }
@@ -1600,10 +1656,6 @@ export function initEvents({ main, anchor }) {
     };
   }
 
-  function getEventStatusMeta(status) {
-    return EVENT_STATUS_META[normalizeEventStatus(status)] || EVENT_STATUS_META.planned;
-  }
-
   function normalizeEventStatus(value) {
     const normalized = normalizeText(value);
 
@@ -1663,12 +1715,27 @@ export function initEvents({ main, anchor }) {
       return "";
     }
 
-    const date = new Date(value);
+    const rawValue = String(value).trim();
+    if (isDateTimeLocalValue(rawValue)) {
+      return parseLocalDateTimeToUtc(rawValue);
+    }
+
+    const date = new Date(rawValue);
     return Number.isNaN(date.getTime()) ? "" : date.toISOString();
   }
 
-  function parseDateTimeLocal(value) {
-    const date = new Date(value);
+  function parseLocalDateTimeToUtc(value) {
+    const rawValue = String(value || "").trim();
+
+    if (!isDateTimeLocalValue(rawValue)) {
+      return normalizeDate(rawValue);
+    }
+
+    const [datePart, timePart] = rawValue.split("T");
+    const [year, month, day] = datePart.split("-").map(Number);
+    const [hour = 0, minute = 0, second = 0] = timePart.split(":").map(Number);
+    const date = new Date(year, month - 1, day, hour, minute, second, 0);
+
     return Number.isNaN(date.getTime()) ? "" : date.toISOString();
   }
 
@@ -1678,10 +1745,21 @@ export function initEvents({ main, anchor }) {
       return "Fecha no disponible";
     }
 
-    return new Intl.DateTimeFormat("es-MX", {
-      dateStyle: "medium",
-      timeStyle: "short"
-    }).format(date);
+    const parts = new Intl.DateTimeFormat(getUserLocale(), {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZoneName: "short"
+    }).formatToParts(date);
+
+    const datePart = `${getDatePart(parts, "day")} ${getDatePart(parts, "month")} ${getDatePart(parts, "year")}`.trim();
+    const timePart = `${getDatePart(parts, "hour")}:${getDatePart(parts, "minute")}`;
+    const zonePart = getDatePart(parts, "timeZoneName");
+
+    return `${datePart} · ${timePart}${zonePart ? ` ${zonePart}` : ""} (hora local)`;
   }
 
   function formatDateForInput(value) {
@@ -1692,6 +1770,107 @@ export function initEvents({ main, anchor }) {
 
     const localDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000));
     return localDate.toISOString().slice(0, 16);
+  }
+
+  function getCountdownMeta(record) {
+    const status = getEventRuntimeStatus(record);
+
+    if (status === "finished") {
+      return {
+        label: "Finalizado",
+        className: "is-finished"
+      };
+    }
+
+    if (status === "active") {
+      return {
+        label: "En curso",
+        className: "is-active"
+      };
+    }
+
+    const startsAt = new Date(record?.startsAt);
+    if (Number.isNaN(startsAt.getTime())) {
+      return {
+        label: "Fecha no disponible",
+        className: "is-finished"
+      };
+    }
+
+    const diffMs = startsAt.getTime() - Date.now();
+
+    if (diffMs <= 0) {
+      return {
+        label: "En curso",
+        className: "is-active"
+      };
+    }
+
+    return {
+      label: `Empieza en ${formatDuration(diffMs)}`,
+      className: "is-planned"
+    };
+  }
+
+  function getEventStatusMeta(recordOrStatus) {
+    const status = typeof recordOrStatus === "object"
+      ? getEventRuntimeStatus(recordOrStatus)
+      : normalizeEventStatus(recordOrStatus);
+
+    return EVENT_STATUS_META[status] || EVENT_STATUS_META.planned;
+  }
+
+  function getEventRuntimeStatus(record) {
+    const status = normalizeEventStatus(record?.status);
+
+    if (status === "finished") {
+      return "finished";
+    }
+
+    const startsAt = new Date(record?.startsAt);
+    if (status === "active" || (!Number.isNaN(startsAt.getTime()) && startsAt.getTime() <= Date.now())) {
+      return "active";
+    }
+
+    return "planned";
+  }
+
+  function formatDuration(milliseconds) {
+    const totalMinutes = Math.max(1, Math.ceil(milliseconds / 60000));
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = totalMinutes % 60;
+
+    const parts = [];
+    if (days) {
+      parts.push(`${days} ${days === 1 ? "día" : "días"}`);
+    }
+
+    if (hours) {
+      parts.push(`${hours} ${hours === 1 ? "hora" : "horas"}`);
+    }
+
+    if (!days && minutes) {
+      parts.push(`${minutes} ${minutes === 1 ? "minuto" : "minutos"}`);
+    }
+
+    return parts.slice(0, 2).join(" ");
+  }
+
+  function isDateTimeLocalValue(value) {
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(String(value || "").trim());
+  }
+
+  function getUserLocale() {
+    return navigator.languages?.[0] || navigator.language || "es-MX";
+  }
+
+  function getLocalTimeZoneLabel() {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "zona local del navegador";
+  }
+
+  function getDatePart(parts, type) {
+    return parts.find((part) => part.type === type)?.value || "";
   }
 
   function escapeHtml(value) {

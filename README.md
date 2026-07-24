@@ -49,4 +49,6 @@ El gestor de eventos guarda `members`, `events` y `participations` por separado.
 
 En Eventos, la consulta de participacion es publica y de solo lectura. Crear, editar, eliminar, iniciar, finalizar y gestionar participantes requiere desbloquear la sesion Admin con el flujo existente.
 
+Las fechas de eventos se guardan internamente en UTC ISO 8601. El formulario de administracion toma la fecha/hora local del navegador y la convierte a UTC antes de guardar; al visualizar, cada usuario ve la hora convertida automaticamente a su zona horaria local con un contador regresivo en vivo.
+
 La clave publishable es publica y puede vivir en el frontend. No subas claves secretas ni claves de servicio al repositorio.

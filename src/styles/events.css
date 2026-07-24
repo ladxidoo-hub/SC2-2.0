@@ -522,6 +522,14 @@
   font-size: 1.18rem;
 }
 
+.events-time-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+
 .events-event-heading time,
 .events-participant-preview,
 .events-member-summary p,
@@ -534,7 +542,6 @@
   align-items: center;
   min-height: 24px;
   padding: 0 8px;
-  margin: 6px 0 5px;
   color: var(--gold);
   background: rgba(237, 196, 103, 0.1);
   border: 1px solid rgba(237, 196, 103, 0.35);
@@ -551,6 +558,33 @@
 }
 
 .events-status-badge.is-finished {
+  color: var(--muted-strong);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.events-countdown {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 10px;
+  margin-top: 8px;
+  color: var(--cyan);
+  background: rgba(72, 221, 255, 0.09);
+  border: 1px solid rgba(72, 221, 255, 0.34);
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.events-countdown.is-active {
+  color: var(--green);
+  background: rgba(155, 255, 87, 0.1);
+  border-color: rgba(155, 255, 87, 0.45);
+}
+
+.events-countdown.is-finished {
   color: var(--muted-strong);
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.16);
@@ -899,6 +933,13 @@
   font-weight: 900;
 }
 
+.events-form-hint {
+  margin: -1px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .events-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -922,6 +963,10 @@
   display: block;
   margin: 6px 0 0;
   overflow-wrap: anywhere;
+}
+
+.events-detail-block .events-countdown {
+  display: inline-flex;
 }
 
 .events-detail-block p {
