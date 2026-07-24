@@ -31,7 +31,7 @@ El workflow `.github/workflows/deploy.yml` instala dependencias, ejecuta `npm ru
 
 ## Supabase
 
-El panel Admin y la biblioteca de guias usan Supabase como almacenamiento remoto mediante `src/services/supabaseStore.js`.
+El panel Admin, la biblioteca de guias y el gestor de eventos usan Supabase como almacenamiento remoto mediante `src/services/supabaseStore.js`.
 
 Antes de usarlo en produccion, abre Supabase SQL Editor y ejecuta:
 
@@ -39,6 +39,12 @@ Antes de usarlo en produccion, abre Supabase SQL Editor y ejecuta:
 -- supabase/schema.sql
 ```
 
-La tabla `app_state` guarda dos documentos publicos de la app: `corp-command` para miembros y `guides-library` para guias.
+La tabla `app_state` guarda tres documentos publicos de la app:
+
+- `corp-command`: miembros, alters, EX-CORP y lista negra.
+- `guides-library`: guias.
+- `community-events`: miembros de eventos, eventos y participaciones.
+
+El gestor de eventos guarda `members`, `events` y `participations` por separado. Los contadores de Mineria e Industria, PvE, PvP, total general, ultima participacion e historial de cada miembro se calculan desde `participations`, por lo que al editar o eliminar un evento las estadisticas se actualizan sin duplicar datos. Esta estructura deja espacio para puntos, rankings, filtros por fecha, reportes mensuales/anuales, roles de usuario y exportacion a Excel o PDF.
 
 La clave publishable es publica y puede vivir en el frontend. No subas claves secretas ni claves de servicio al repositorio.

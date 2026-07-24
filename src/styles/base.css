@@ -73,6 +73,13 @@ body[data-route="roles"] {
     #08060d;
 }
 
+body[data-route="eventos"] {
+  background:
+    linear-gradient(90deg, rgba(4, 8, 11, 0.94), rgba(4, 8, 11, 0.58) 48%, rgba(4, 8, 11, 0.9)),
+    url("../assets/admin/command-center-bg.png") center center / cover fixed no-repeat,
+    #04080b;
+}
+
 body[data-route="admin"] {
   background:
     linear-gradient(90deg, rgba(5, 4, 8, 0.92), rgba(5, 4, 8, 0.58) 48%, rgba(5, 4, 8, 0.9)),

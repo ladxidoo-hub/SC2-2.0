@@ -3,6 +3,7 @@ const DEFAULT_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_SoBoYKDjeKVgrX8arJ23Cg_
 const DEFAULT_TABLE_NAME = "app_state";
 const APP_STATE_ID = "corp-command";
 const GUIDES_STATE_ID = "guides-library";
+const EVENTS_STATE_ID = "community-events";
 
 const supabaseUrl = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL);
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
@@ -59,6 +60,14 @@ export async function loadGuidesState() {
 
 export async function saveGuidesState(payload) {
   return saveAppState(GUIDES_STATE_ID, payload);
+}
+
+export async function loadEventsState() {
+  return loadAppState(EVENTS_STATE_ID);
+}
+
+export async function saveEventsState(payload) {
+  return saveAppState(EVENTS_STATE_ID, payload);
 }
 
 async function supabaseRequest(path, options = {}) {

@@ -119,8 +119,13 @@ export function renderHome() {
               <strong>Biblioteca de Roles</strong>
               <span>Galeria visual con visor ampliado, zoom, swipe y pantalla completa.</span>
             </a>
-            <a class="module-tile" href="#/admin">
+            <a class="module-tile" href="#/eventos">
               <span class="module-kicker">03</span>
+              <strong>Gestor de Eventos</strong>
+              <span>Mineria, PvE, PvP, participaciones automaticas e historial por miembro.</span>
+            </a>
+            <a class="module-tile" href="#/admin">
+              <span class="module-kicker">04</span>
               <strong>Corp Command</strong>
               <span>Panel local para miembros, alters, EX-CORP, lista negra y respaldos JSON.</span>
             </a>

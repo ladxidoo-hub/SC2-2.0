@@ -4,12 +4,14 @@ import "./styles/rules.css";
 import "./styles/roles.css";
 import "./styles/guides.css";
 import "./styles/admin.css";
+import "./styles/events.css";
 
 import { renderHome, initHome } from "./views/home.js";
 import { renderRules, initRules } from "./views/rules.js";
 import { renderRoles, initRoles } from "./views/roles.js";
 import { renderGuides, initGuides } from "./views/guides.js";
 import { renderAdmin, initAdmin } from "./views/admin.js";
+import { renderEvents, initEvents } from "./views/events.js";
 
 const routes = {
   inicio: {
@@ -17,6 +19,12 @@ const routes = {
     title: "[SC2] Heart Of The Swarm",
     render: renderHome,
     init: initHome
+  },
+  eventos: {
+    label: "Eventos",
+    title: "Gestor de Eventos",
+    render: renderEvents,
+    init: initEvents
   },
   reglamento: {
     label: "Reglamento",
