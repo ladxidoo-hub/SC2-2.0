@@ -132,7 +132,7 @@ export function renderHome() {
         <div class="section-shell">
           <div class="section-heading compact">
             <p class="eyebrow">Herramientas externas</p>
-            <h2 id="external-tools-title">Accesos rapidos para operaciones</h2>
+            <h2 id="external-tools-title">Accesos a paginas externas</h2>
           </div>
 
           <div class="external-tools-grid">
