@@ -32,6 +32,21 @@ const CATEGORIES = [
 
 const CATEGORY_BY_ID = Object.fromEntries(CATEGORIES.map((category) => [category.id, category]));
 
+const EVENT_STATUS_META = {
+  planned: {
+    label: "Programado",
+    className: "is-planned"
+  },
+  active: {
+    label: "En curso",
+    className: "is-active"
+  },
+  finished: {
+    label: "Finalizado",
+    className: "is-finished"
+  }
+};
+
 export function renderEvents() {
   return `
     <section class="events-page" aria-label="Gestor de eventos de comunidad">
@@ -50,7 +65,32 @@ export function renderEvents() {
         </div>
       </header>
 
+      <section class="events-public-lookup" aria-labelledby="eventsPublicLookupTitle">
+        <div class="events-public-heading">
+          <div>
+            <span class="events-kicker">Consulta pública</span>
+            <h2 id="eventsPublicLookupTitle">Consulta tu participación</h2>
+            <p>Busca tu nombre de piloto para ver tus participaciones acumuladas por tipo de operación.</p>
+          </div>
+
+          <label class="events-search events-public-search" for="eventsPublicSearchInput">
+            <span>Piloto</span>
+            <input id="eventsPublicSearchInput" type="search" autocomplete="off" placeholder="Escribe tu nombre">
+          </label>
+        </div>
+
+        <div class="events-public-result" id="eventsPublicParticipationMount" aria-live="polite"></div>
+      </section>
+
       <section class="events-stat-rail" id="eventsStatsRail" aria-label="Resumen de participaciones"></section>
+
+      <section class="events-admin-zone" data-events-editor-control>
+        <div>
+          <span class="events-kicker">Administración de eventos</span>
+          <h2>Panel de gestión</h2>
+        </div>
+        <p>Solo administradores desbloqueados pueden crear, editar, iniciar, finalizar o eliminar eventos.</p>
+      </section>
 
       <section class="events-workspace" aria-label="Eventos por categoría">
         <aside class="events-category-panel" id="eventsCategoryNav" aria-label="Apartados de eventos"></aside>
@@ -120,6 +160,7 @@ export function initEvents({ main, anchor }) {
     events: [],
     participations: [],
     activeCategory: CATEGORY_BY_ID[anchor] ? anchor : "mining",
+    publicSearchTerm: "",
     eventSearchTerm: "",
     memberSearchTerm: "",
     expandedMembers: new Set(),
@@ -132,6 +173,8 @@ export function initEvents({ main, anchor }) {
     adminLink: main.querySelector("[data-events-admin-link]"),
     editorControls: Array.from(main.querySelectorAll("[data-events-editor-control]")),
     syncStatus: main.querySelector("[data-events-sync-status]"),
+    publicSearchInput: main.querySelector("#eventsPublicSearchInput"),
+    publicParticipationMount: main.querySelector("#eventsPublicParticipationMount"),
     statsRail: main.querySelector("#eventsStatsRail"),
     categoryNav: main.querySelector("#eventsCategoryNav"),
     categoryTitle: main.querySelector("#eventsCategoryTitle"),
@@ -162,6 +205,11 @@ export function initEvents({ main, anchor }) {
 
   function bindEvents() {
     main.addEventListener("click", handlePageAction, { signal });
+
+    els.publicSearchInput.addEventListener("input", (event) => {
+      state.publicSearchTerm = event.target.value.trim();
+      renderPublicParticipation();
+    }, { signal });
 
     els.eventsSearchInput.addEventListener("input", (event) => {
       state.eventSearchTerm = event.target.value.trim();
@@ -214,6 +262,12 @@ export function initEvents({ main, anchor }) {
       case "show-event":
         openEventDetails(eventId);
         break;
+      case "start-event":
+        setEventLifecycle(eventId, "active");
+        break;
+      case "finish-event":
+        setEventLifecycle(eventId, "finished");
+        break;
       case "delete-event":
         openDeleteEventModal(eventId);
         break;
@@ -235,6 +289,8 @@ export function initEvents({ main, anchor }) {
     return [
       "create-event",
       "edit-event",
+      "start-event",
+      "finish-event",
       "delete-event",
       "create-member",
       "edit-member"
@@ -382,6 +438,7 @@ export function initEvents({ main, anchor }) {
     state.isAdmin = isAdminUnlocked();
     updateSyncStatus();
     updateEditorControls();
+    renderPublicParticipation();
     renderStats();
     renderCategoryNav();
     renderEventsList();
@@ -396,6 +453,115 @@ export function initEvents({ main, anchor }) {
     if (els.adminLink) {
       els.adminLink.hidden = state.isAdmin;
     }
+  }
+
+  function renderPublicParticipation() {
+    const term = normalizeText(state.publicSearchTerm);
+
+    if (!state.members.length) {
+      els.publicParticipationMount.innerHTML = renderPublicEmptyState(
+        "Sin pilotos registrados",
+        "Cuando un administrador registre participantes en eventos, sus totales aparecerán aquí."
+      );
+      return;
+    }
+
+    if (!term) {
+      els.publicParticipationMount.innerHTML = renderPublicEmptyState(
+        "Busca tu piloto",
+        "Escribe tu nombre para consultar tu total acumulado, Minería e Industria, PvE y PvP."
+      );
+      return;
+    }
+
+    const matches = getSortedMembers()
+      .filter((member) => normalizeText(member.name).includes(term))
+      .slice(0, 8);
+
+    if (!matches.length) {
+      els.publicParticipationMount.innerHTML = renderPublicEmptyState(
+        "Sin coincidencias",
+        "Revisa que el nombre esté escrito igual que en el registro de eventos."
+      );
+      return;
+    }
+
+    const exactMatch = matches.find((member) => normalizeText(member.name) === term);
+    const selectedMember = exactMatch || (matches.length === 1 ? matches[0] : null);
+
+    if (selectedMember) {
+      els.publicParticipationMount.innerHTML = renderPublicParticipationCard(selectedMember);
+      return;
+    }
+
+    els.publicParticipationMount.innerHTML = `
+      <div class="events-public-match-copy">
+        <strong>${matches.length} coincidencias</strong>
+        <span>Afina la búsqueda para ver el historial completo de un piloto.</span>
+      </div>
+      <div class="events-public-match-grid">
+        ${matches.map((member) => renderPublicParticipationCard(member, true)).join("")}
+      </div>
+    `;
+  }
+
+  function renderPublicParticipationCard(member, compact = false) {
+    const stats = getMemberStats(member.uid);
+    const history = getMemberHistory(member.uid);
+    const last = history[0];
+
+    return `
+      <article class="events-public-card ${compact ? "is-compact" : ""}">
+        <div class="events-public-card-header">
+          <div>
+            <span class="events-kicker">Piloto</span>
+            <h3>${escapeHtml(member.name)}</h3>
+            <p>${last ? `Última participación: ${escapeHtml(formatDate(last.eventStartsAt))}` : "Sin participaciones registradas."}</p>
+          </div>
+        </div>
+
+        <div class="events-member-stats" aria-label="Participaciones acumuladas de ${escapeAttr(member.name)}">
+          ${renderMemberStat("Total acumulado", stats.total)}
+          ${renderMemberStat("Minería e Industria", stats.mining)}
+          ${renderMemberStat("PvE", stats.pve)}
+          ${renderMemberStat("PvP", stats.pvp)}
+        </div>
+
+        ${compact ? "" : renderPublicHistory(history)}
+      </article>
+    `;
+  }
+
+  function renderPublicHistory(history) {
+    if (!history.length) {
+      return `<p class="events-muted">Todavía no tienes participaciones registradas.</p>`;
+    }
+
+    return `
+      <div class="events-public-history">
+        <h4>Historial reciente</h4>
+        <ul>
+          ${history.slice(0, 6).map((item) => `
+            <li>
+              <span class="events-history-tag">${escapeHtml(CATEGORY_BY_ID[item.category]?.tag || "EVT")}</span>
+              <span>
+                <strong>${escapeHtml(item.eventName)}</strong>
+                <time datetime="${escapeAttr(item.eventStartsAt)}">${escapeHtml(formatDate(item.eventStartsAt))}</time>
+              </span>
+            </li>
+          `).join("")}
+        </ul>
+      </div>
+    `;
+  }
+
+  function renderPublicEmptyState(title, copy) {
+    return `
+      <div class="events-public-empty">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(copy)}</span>
+      </div>
+    `;
   }
 
   function renderStats() {
@@ -467,6 +633,7 @@ export function initEvents({ main, anchor }) {
 
   function renderEventCard(record) {
     const category = CATEGORY_BY_ID[record.category] || getActiveCategory();
+    const status = getEventStatusMeta(record.status);
     const participants = record.participantIds.map(getMemberName).filter(Boolean);
     const previewNames = participants.slice(0, 4).join(", ");
     const extraCount = Math.max(0, participants.length - 4);
@@ -478,6 +645,7 @@ export function initEvents({ main, anchor }) {
             <span class="events-event-tag">${escapeHtml(category.tag)}</span>
             <div>
               <h3>${escapeHtml(record.name)}</h3>
+              <span class="events-status-badge ${escapeAttr(status.className)}">${escapeHtml(status.label)}</span>
               <time datetime="${escapeAttr(record.startsAt)}">${escapeHtml(formatDate(record.startsAt))}</time>
             </div>
           </div>
@@ -490,13 +658,30 @@ export function initEvents({ main, anchor }) {
 
         <div class="events-event-actions" aria-label="Acciones del evento">
           <button class="events-btn events-btn-small" type="button" data-events-action="show-event" data-event-id="${escapeAttr(record.uid)}">Detalles</button>
-          ${state.isAdmin ? `
-            <button class="events-btn events-btn-small" type="button" data-events-action="edit-event" data-event-id="${escapeAttr(record.uid)}">Editar</button>
-            <button class="events-btn events-btn-danger events-btn-small" type="button" data-events-action="delete-event" data-event-id="${escapeAttr(record.uid)}">Eliminar</button>
-          ` : ""}
+          ${state.isAdmin ? renderEventAdminActions(record) : ""}
         </div>
       </article>
     `;
+  }
+
+  function renderEventAdminActions(record) {
+    return `
+      ${renderEventLifecycleButton(record)}
+      <button class="events-btn events-btn-small" type="button" data-events-action="edit-event" data-event-id="${escapeAttr(record.uid)}">Editar</button>
+      <button class="events-btn events-btn-danger events-btn-small" type="button" data-events-action="delete-event" data-event-id="${escapeAttr(record.uid)}">Eliminar</button>
+    `;
+  }
+
+  function renderEventLifecycleButton(record) {
+    const status = normalizeEventStatus(record.status);
+    const lifecycleAction = status === "active" ? "finish-event" : "start-event";
+    const lifecycleLabel = status === "active" ? "Finalizar" : "Iniciar";
+
+    if (status === "finished") {
+      return "";
+    }
+
+    return `<button class="events-btn events-btn-small" type="button" data-events-action="${lifecycleAction}" data-event-id="${escapeAttr(record.uid)}">${lifecycleLabel}</button>`;
   }
 
   function renderMembers() {
@@ -651,6 +836,11 @@ export function initEvents({ main, anchor }) {
       const addExistingButton = event.target.closest("[data-add-existing-member]");
       const createMemberButton = event.target.closest("[data-create-inline-member]");
 
+      if ((addExistingButton || createMemberButton) && !ensureCanEdit()) {
+        closeModal();
+        return;
+      }
+
       if (addExistingButton) {
         const select = main.querySelector("#eventsExistingMemberSelect");
         const memberId = select.value;
@@ -678,6 +868,7 @@ export function initEvents({ main, anchor }) {
 
         if (!existing) {
           persistData(false);
+          renderPublicParticipation();
           renderStats();
           renderMembers();
         }
@@ -690,12 +881,23 @@ export function initEvents({ main, anchor }) {
         return;
       }
 
+      if (!ensureCanEdit()) {
+        closeModal();
+        return;
+      }
+
       selectedParticipantIds.delete(removeButton.dataset.memberId);
       renderParticipantEditor();
     }, { signal: modalSignal });
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+
+      if (!ensureCanEdit()) {
+        closeModal();
+        return;
+      }
+
       const result = readEventForm(form, selectedParticipantIds);
       const error = main.querySelector("#eventsEventFormError");
 
@@ -716,6 +918,9 @@ export function initEvents({ main, anchor }) {
       const newEvent = {
         ...result.value,
         uid: createUid("event"),
+        status: "planned",
+        startedAt: "",
+        finishedAt: "",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -838,6 +1043,7 @@ export function initEvents({ main, anchor }) {
     }
 
     const category = CATEGORY_BY_ID[record.category] || getActiveCategory();
+    const status = getEventStatusMeta(record.status);
     const participants = getMembersByIds(record.participantIds);
 
     openModal({
@@ -845,6 +1051,10 @@ export function initEvents({ main, anchor }) {
       title: record.name,
       body: `
         <div class="events-detail-grid">
+          <div class="events-detail-block">
+            <span>Estado</span>
+            <strong>${escapeHtml(status.label)}</strong>
+          </div>
           <div class="events-detail-block">
             <span>Fecha</span>
             <strong>${escapeHtml(formatDate(record.startsAt))}</strong>
@@ -872,7 +1082,10 @@ export function initEvents({ main, anchor }) {
       `,
       footer: `
         <button class="events-btn" type="button" data-events-modal-close>Cerrar</button>
-        ${state.isAdmin ? `<button class="events-btn events-btn-primary" type="button" id="eventsDetailEditButton">Editar</button>` : ""}
+        ${state.isAdmin ? `
+          ${renderEventLifecycleButton(record)}
+          <button class="events-btn events-btn-primary" type="button" id="eventsDetailEditButton">Editar</button>
+        ` : ""}
       `
     });
 
@@ -885,6 +1098,43 @@ export function initEvents({ main, anchor }) {
 
       openEventModal("edit", record.uid);
     }, { signal: modalController.signal });
+  }
+
+  function setEventLifecycle(eventId, nextStatus) {
+    if (!ensureCanEdit()) {
+      return;
+    }
+
+    const record = findEvent(eventId);
+    if (!record) {
+      showToast("No se encontró el evento.");
+      return;
+    }
+
+    const status = normalizeEventStatus(nextStatus);
+    const now = new Date().toISOString();
+
+    record.status = status;
+    record.updatedAt = now;
+
+    if (status === "active") {
+      record.startedAt = now;
+      record.finishedAt = "";
+    }
+
+    if (status === "finished") {
+      record.startedAt = record.startedAt || now;
+      record.finishedAt = now;
+    }
+
+    persistData();
+
+    if (els.modal.open) {
+      closeModal();
+    }
+
+    render();
+    showToast(status === "active" ? "Evento iniciado." : "Evento finalizado.");
   }
 
   function openDeleteEventModal(eventId) {
@@ -905,6 +1155,10 @@ export function initEvents({ main, anchor }) {
       confirmLabel: "Eliminar",
       confirmClass: "events-btn-danger",
       onConfirm: () => {
+        if (!ensureCanEdit()) {
+          return;
+        }
+
         state.events = state.events.filter((item) => item.uid !== record.uid);
         state.participations = state.participations.filter((item) => item.eventId !== record.uid);
         persistData();
@@ -949,6 +1203,12 @@ export function initEvents({ main, anchor }) {
 
     main.querySelector("#eventsMemberForm").addEventListener("submit", (event) => {
       event.preventDefault();
+
+      if (!ensureCanEdit()) {
+        closeModal();
+        return;
+      }
+
       const formData = new FormData(event.currentTarget);
       const name = String(formData.get("name") || "").trim();
       const error = main.querySelector("#eventsMemberFormError");
@@ -1103,6 +1363,9 @@ export function initEvents({ main, anchor }) {
       name: "",
       startsAt: "",
       description: "",
+      status: "planned",
+      startedAt: "",
+      finishedAt: "",
       participantIds: [],
       createdAt: "",
       updatedAt: ""
@@ -1197,6 +1460,7 @@ export function initEvents({ main, anchor }) {
       record.name,
       record.description,
       CATEGORY_BY_ID[record.category]?.label,
+      getEventStatusMeta(record.status).label,
       participantNames
     ].join(" ")).includes(term);
   }
@@ -1302,6 +1566,9 @@ export function initEvents({ main, anchor }) {
       name,
       startsAt,
       description: stringFrom(raw.description, raw.descripcion),
+      status: normalizeEventStatus(raw.status || raw.estado),
+      startedAt: normalizeDate(raw.startedAt || raw.iniciadoEn),
+      finishedAt: normalizeDate(raw.finishedAt || raw.finalizadoEn),
       participantIds,
       createdAt: stringFrom(raw.createdAt) || new Date().toISOString(),
       updatedAt: stringFrom(raw.updatedAt) || new Date().toISOString()
@@ -1331,6 +1598,24 @@ export function initEvents({ main, anchor }) {
       eventStartsAt: normalizeDate(raw.eventStartsAt || record?.startsAt || raw.startsAt) || new Date().toISOString(),
       recordedAt: normalizeDate(raw.recordedAt || raw.createdAt) || new Date().toISOString()
     };
+  }
+
+  function getEventStatusMeta(status) {
+    return EVENT_STATUS_META[normalizeEventStatus(status)] || EVENT_STATUS_META.planned;
+  }
+
+  function normalizeEventStatus(value) {
+    const normalized = normalizeText(value);
+
+    if (["active", "en curso", "iniciado", "started"].includes(normalized)) {
+      return "active";
+    }
+
+    if (["finished", "finalizado", "cerrado", "ended"].includes(normalized)) {
+      return "finished";
+    }
+
+    return "planned";
   }
 
   function normalizeCategory(value) {

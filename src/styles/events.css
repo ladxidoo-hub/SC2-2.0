@@ -4,6 +4,10 @@
   padding: 28px 0 52px;
 }
 
+.events-page [hidden] {
+  display: none !important;
+}
+
 .events-command-center {
   display: flex;
   align-items: flex-start;
@@ -157,6 +161,9 @@
 }
 
 .events-stat-card,
+.events-public-lookup,
+.events-public-card,
+.events-admin-zone,
 .events-event-card,
 .events-member-card,
 .events-board,
@@ -173,6 +180,9 @@
 }
 
 .events-stat-card::before,
+.events-public-lookup::before,
+.events-public-card::before,
+.events-admin-zone::before,
 .events-event-card::before,
 .events-member-card::before,
 .events-board::before,
@@ -208,6 +218,141 @@
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.events-public-lookup {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.events-public-heading,
+.events-public-card-header,
+.events-admin-zone {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.events-public-heading h2,
+.events-admin-zone h2 {
+  margin: 4px 0 8px;
+  font-size: clamp(1.55rem, 3vw, 2.35rem);
+  line-height: 1.05;
+}
+
+.events-public-heading p,
+.events-public-card-header p,
+.events-admin-zone p,
+.events-public-match-copy span,
+.events-public-empty span {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.events-public-search {
+  flex: 0 1 380px;
+}
+
+.events-public-result {
+  display: grid;
+  gap: 12px;
+}
+
+.events-public-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.events-public-card h3 {
+  margin: 4px 0 6px;
+  overflow-wrap: anywhere;
+  font-size: 1.28rem;
+}
+
+.events-public-card.is-compact {
+  box-shadow: none;
+}
+
+.events-public-match-copy {
+  display: grid;
+  gap: 3px;
+  padding: 0 2px;
+}
+
+.events-public-match-copy strong,
+.events-public-empty strong {
+  color: var(--text);
+}
+
+.events-public-match-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.events-public-history {
+  padding-top: 14px;
+  border-top: 1px solid rgba(72, 221, 255, 0.12);
+}
+
+.events-public-history h4 {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+}
+
+.events-public-history ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.events-public-history li {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(72, 221, 255, 0.1);
+  border-radius: var(--radius);
+}
+
+.events-public-history strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.events-public-history time {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.events-public-empty {
+  display: grid;
+  gap: 4px;
+  min-height: 92px;
+  padding: 16px;
+  place-content: center;
+  text-align: center;
+  border: 1px dashed rgba(72, 221, 255, 0.22);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.events-admin-zone {
+  align-items: center;
+  padding: 14px 16px;
+  margin-bottom: 18px;
 }
 
 .events-workspace {
@@ -382,6 +527,33 @@
 .events-member-summary p,
 .events-member-history time {
   color: var(--muted);
+}
+
+.events-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  margin: 6px 0 5px;
+  color: var(--gold);
+  background: rgba(237, 196, 103, 0.1);
+  border: 1px solid rgba(237, 196, 103, 0.35);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.events-status-badge.is-active {
+  color: var(--green);
+  background: rgba(155, 255, 87, 0.1);
+  border-color: rgba(155, 255, 87, 0.45);
+}
+
+.events-status-badge.is-finished {
+  color: var(--muted-strong);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .events-event-main p {
@@ -836,6 +1008,8 @@
 
 @media (max-width: 860px) {
   .events-command-center,
+  .events-public-heading,
+  .events-admin-zone,
   .events-board-header,
   .events-members-header,
   .events-modal-section-heading {
@@ -850,6 +1024,10 @@
 
   .events-search {
     width: 100%;
+  }
+
+  .events-public-search {
+    flex-basis: auto;
   }
 
   .events-event-card,
@@ -871,6 +1049,7 @@
   }
 
   .events-stat-rail,
+  .events-public-match-grid,
   .events-category-panel,
   .events-form-grid,
   .events-detail-grid,

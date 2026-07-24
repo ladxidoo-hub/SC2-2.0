@@ -47,4 +47,6 @@ La tabla `app_state` guarda tres documentos publicos de la app:
 
 El gestor de eventos guarda `members`, `events` y `participations` por separado. Los contadores de Mineria e Industria, PvE, PvP, total general, ultima participacion e historial de cada miembro se calculan desde `participations`, por lo que al editar o eliminar un evento las estadisticas se actualizan sin duplicar datos. Esta estructura deja espacio para puntos, rankings, filtros por fecha, reportes mensuales/anuales, roles de usuario y exportacion a Excel o PDF.
 
+En Eventos, la consulta de participacion es publica y de solo lectura. Crear, editar, eliminar, iniciar, finalizar y gestionar participantes requiere desbloquear la sesion Admin con el flujo existente.
+
 La clave publishable es publica y puede vivir en el frontend. No subas claves secretas ni claves de servicio al repositorio.
