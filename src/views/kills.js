@@ -179,6 +179,7 @@ export function initKills({ main, anchor }) {
   return () => {
     activeModalCleanup?.();
     controller.abort();
+    document.body.classList.remove("viewer-lock");
     if (els.modal.open) {
       els.modal.close();
     }
@@ -198,6 +199,7 @@ export function initKills({ main, anchor }) {
 
     els.modal.addEventListener("close", () => {
       els.modal.classList.remove("is-visible");
+      document.body.classList.remove("viewer-lock");
       activeModalCleanup?.();
       activeModalCleanup = null;
     }, { signal });
@@ -1147,6 +1149,8 @@ export function initKills({ main, anchor }) {
     els.modalTitle.textContent = title;
     els.modalBody.innerHTML = body;
     els.modalFooter.innerHTML = footer;
+    els.modalBody.scrollTop = 0;
+    document.body.classList.add("viewer-lock");
 
     if (!els.modal.open) {
       els.modal.showModal();
@@ -1163,6 +1167,7 @@ export function initKills({ main, anchor }) {
     activeModalCleanup?.();
     activeModalCleanup = null;
     els.modal.classList.remove("is-visible");
+    document.body.classList.remove("viewer-lock");
     window.setTimeout(() => {
       if (els.modal.open) {
         els.modal.close();
