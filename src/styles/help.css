@@ -1,0 +1,218 @@
+.help-page {
+  width: min(100% - 32px, var(--max-width));
+  min-height: calc(100vh - var(--nav-height));
+  margin: 0 auto;
+  padding: calc(var(--nav-height) + 4rem) 0 5rem;
+}
+
+.help-hero,
+.help-section {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(12, 20, 25, 0.92), rgba(8, 12, 18, 0.84)),
+    rgba(5, 8, 11, 0.84);
+  box-shadow: var(--shadow);
+}
+
+.help-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  align-items: end;
+  gap: 2rem;
+  min-height: 320px;
+  padding: clamp(2rem, 6vw, 4rem);
+}
+
+.help-kicker {
+  display: inline-flex;
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.help-hero h1,
+.help-section-heading h2 {
+  margin: 0.5rem 0 0;
+  color: var(--text);
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.help-hero h1 {
+  max-width: 760px;
+  font-size: clamp(2.6rem, 7vw, 5.4rem);
+}
+
+.help-hero p {
+  max-width: 720px;
+  margin: 1.2rem 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.help-status-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line-warm);
+  border-radius: var(--radius);
+  background: rgba(6, 9, 13, 0.84);
+}
+
+.help-status-panel span,
+.help-card span,
+.help-step span {
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.help-status-panel strong {
+  color: var(--muted-strong);
+  line-height: 1.35;
+}
+
+.help-section {
+  margin-top: 1.5rem;
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.help-section-heading {
+  max-width: 760px;
+  margin-bottom: 1.35rem;
+}
+
+.help-section-heading h2 {
+  font-size: clamp(2rem, 4.5vw, 3.4rem);
+}
+
+.help-steps,
+.help-section-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.help-steps {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.help-section-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.help-step,
+.help-card {
+  position: relative;
+  display: grid;
+  gap: 0.75rem;
+  min-height: 190px;
+  padding: 1.2rem;
+  overflow: hidden;
+  color: var(--text);
+  border: 1px solid rgba(72, 221, 255, 0.24);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, rgba(72, 221, 255, 0.12), rgba(159, 105, 255, 0.08)),
+    rgba(4, 7, 10, 0.86);
+  text-decoration: none;
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.help-step:hover,
+.help-step:focus-visible,
+.help-card:hover,
+.help-card:focus-within {
+  border-color: rgba(155, 255, 87, 0.44);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+  transform: translateY(-2px);
+}
+
+.help-step strong,
+.help-card h3 {
+  color: var(--text);
+  font-size: 1.2rem;
+  line-height: 1.15;
+}
+
+.help-step p,
+.help-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.help-card a {
+  align-self: end;
+  width: fit-content;
+  color: var(--cyan);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.help-card a:hover,
+.help-card a:focus-visible {
+  color: var(--green);
+}
+
+.help-split {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.7fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.help-tip-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.help-tip-list li {
+  padding: 1rem 1.1rem;
+  color: var(--muted-strong);
+  border: 1px solid rgba(155, 255, 87, 0.2);
+  border-radius: var(--radius);
+  background: rgba(7, 11, 13, 0.78);
+  line-height: 1.5;
+}
+
+@media (max-width: 920px) {
+  .help-hero,
+  .help-split {
+    grid-template-columns: 1fr;
+  }
+
+  .help-steps,
+  .help-section-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .help-page {
+    width: min(100% - 24px, var(--max-width));
+    padding-top: calc(var(--nav-height) + 2rem);
+  }
+
+  .help-hero,
+  .help-section {
+    padding: 1.2rem;
+  }
+
+  .help-steps,
+  .help-section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .help-step,
+  .help-card {
+    min-height: 0;
+  }
+}

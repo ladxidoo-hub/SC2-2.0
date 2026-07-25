@@ -129,6 +129,11 @@ export function renderHome() {
               <strong>Corp Command</strong>
               <span>Panel local para miembros, alters, EX-CORP, lista negra y respaldos JSON.</span>
             </a>
+            <a class="module-tile" href="#/ayuda">
+              <span class="module-kicker">05</span>
+              <strong>Guia de la pagina</strong>
+              <span>Mapa rapido para nuevos miembros: que abrir, donde buscar y como usar cada seccion.</span>
+            </a>
           </div>
         </div>
       </section>

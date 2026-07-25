@@ -5,6 +5,7 @@ import "./styles/roles.css";
 import "./styles/guides.css";
 import "./styles/admin.css";
 import "./styles/events.css";
+import "./styles/help.css";
 
 import { renderHome, initHome } from "./views/home.js";
 import { renderRules, initRules } from "./views/rules.js";
@@ -12,6 +13,7 @@ import { renderRoles, initRoles } from "./views/roles.js";
 import { renderGuides, initGuides } from "./views/guides.js";
 import { renderAdmin, initAdmin } from "./views/admin.js";
 import { renderEvents, initEvents } from "./views/events.js";
+import { renderHelp, initHelp } from "./views/help.js";
 
 const routes = {
   inicio: {
@@ -43,6 +45,12 @@ const routes = {
     title: "Guias del Enjambre",
     render: renderGuides,
     init: initGuides
+  },
+  ayuda: {
+    label: "Ayuda",
+    title: "Guia de Uso",
+    render: renderHelp,
+    init: initHelp
   },
   admin: {
     label: "Admin",

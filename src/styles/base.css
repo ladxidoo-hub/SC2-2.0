@@ -80,6 +80,13 @@ body[data-route="eventos"] {
     #04080b;
 }
 
+body[data-route="ayuda"] {
+  background:
+    linear-gradient(90deg, rgba(4, 8, 11, 0.94), rgba(4, 8, 11, 0.6) 48%, rgba(4, 8, 11, 0.92)),
+    url("../assets/home/sc2-heart-of-the-swarm-bg.png") center center / cover fixed no-repeat,
+    #04080b;
+}
+
 body[data-route="admin"] {
   background:
     linear-gradient(90deg, rgba(5, 4, 8, 0.92), rgba(5, 4, 8, 0.58) 48%, rgba(5, 4, 8, 0.9)),
