@@ -96,7 +96,7 @@ export function renderKills() {
         <div class="kills-command-actions">
           <span class="kills-sync-status" data-kills-sync-status>Conectando BD</span>
           <a class="kills-btn" href="#/admin" data-kills-admin-link>Desbloquear Admin</a>
-          <button class="kills-btn kills-btn-primary" type="button" data-kills-action="open-upload" data-kills-admin-control>Subir Kill</button>
+          <button class="kills-btn kills-btn-primary" type="button" data-kills-action="open-upload">Subir Kill</button>
         </div>
       </header>
 
@@ -293,7 +293,6 @@ export function initKills({ main, anchor }) {
 
   function requiresAdmin(action) {
     return [
-      "open-upload",
       "edit-kill",
       "delete-kill",
       "export-kills",
@@ -539,7 +538,7 @@ export function initKills({ main, anchor }) {
         </article>
 
         <aside class="kills-side-stack">
-          ${state.isAdmin ? `<button class="kills-upload-banner" type="button" data-kills-action="open-upload">Subir Kill</button>` : ""}
+          <button class="kills-upload-banner" type="button" data-kills-action="open-upload">Subir Kill</button>
           ${renderRankingPanel("Top mensual", stats.topMonthly.slice(0, 10), true)}
         </aside>
       </section>
@@ -891,11 +890,11 @@ export function initKills({ main, anchor }) {
   }
 
   function openKillModal(mode, killId) {
-    if (!ensureCanManage()) {
+    const editing = mode === "edit";
+    if (editing && !ensureCanManage()) {
       return;
     }
 
-    const editing = mode === "edit";
     const existing = editing ? findKill(killId) : null;
     if (editing && !existing) {
       showToast("No se encontro la kill.");
@@ -968,7 +967,7 @@ export function initKills({ main, anchor }) {
 
     els.modalBody.addEventListener("submit", (event) => {
       event.preventDefault();
-      if (!ensureCanManage()) {
+      if (editing && !ensureCanManage()) {
         closeModal();
         return;
       }
