@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SC2">
+  <defs>
+    <linearGradient id="sc2-favicon-bg" x1="8" x2="56" y1="8" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#48ddff"/>
+      <stop offset="1" stop-color="#edc467"/>
+    </linearGradient>
+  </defs>
+  <rect width="58" height="58" x="3" y="3" fill="#05070a" rx="10"/>
+  <rect width="50" height="50" x="7" y="7" fill="url(#sc2-favicon-bg)" rx="8"/>
+  <text x="32" y="39" fill="#041012" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="900" text-anchor="middle">SC2</text>
+</svg>
