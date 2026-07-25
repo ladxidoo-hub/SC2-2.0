@@ -44,9 +44,19 @@ const OCR_FIELDS = [
 ];
 
 const SHIPS = [
+  "Apocalypse de ataque Acorazado",
+  "Apocalypse de ataque",
+  "Apocalypse modelo Navy",
+  "Raven de ataque Acorazado",
+  "Raven de ataque",
   "Raven modelo Navy Acorazado",
   "Raven modelo Navy",
   "Raven Navy Issue",
+  "Nidhoggur modelo de la flota",
+  "Endurer Destructor",
+  "Endurer",
+  "Marzio Acorazado",
+  "Marzio",
   "Machariel",
   "Nightmare",
   "Rattlesnake",
@@ -58,6 +68,9 @@ const SHIPS = [
   "Barghest",
   "Apocalypse",
   "Raven",
+  "Rokh",
+  "Typhoon II",
+  "Astarte",
   "Megathron",
   "Dominix",
   "Tempest",
@@ -1467,8 +1480,8 @@ export function initKills({ main, anchor }) {
 
       for (const target of targets) {
         try {
-          const result = await engine.recognize(target.source, "eng", {
-            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]/:-,. ISKisk%<>|& aeiouAEIOU",
+          const result = await engine.recognize(target.source, target.lang || "eng", {
+            ...(target.noWhitelist ? {} : { tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]/:-,. ISKisk%<>|& aeiouAEIOU" }),
             ...(target.options || {})
           });
           regions.push(`OCR_REGION_${target.name.toUpperCase()}\n${result?.data?.text || ""}`);
@@ -1504,6 +1517,45 @@ export function initKills({ main, anchor }) {
 
       return [
         {
+          name: "victim_line_report",
+          source: createOcrCropCanvas(image, { x: 0.09, y: 0.11, width: 0.42, height: 0.13, scale: 5 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "victim_header_report",
+          source: createOcrCropCanvas(image, { x: 0.02, y: 0.08, width: 0.56, height: 0.30, scale: 4 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "victim_cjk_report",
+          source: createOcrCropCanvas(image, { x: 0.02, y: 0.08, width: 0.56, height: 0.30, scale: 4, filter: "none" }),
+          lang: "chi_sim",
+          noWhitelist: true,
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "participants_header_report",
+          source: createOcrCropCanvas(image, { x: 0.00, y: 0.39, width: 0.43, height: 0.10, scale: 4 }),
+          options: { tessedit_pageseg_mode: "7", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "participant_first_report",
+          source: createOcrCropCanvas(image, { x: 0.02, y: 0.48, width: 0.40, height: 0.18, scale: 4 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "ship_value_report",
+          source: createOcrCropCanvas(image, { x: 0.60, y: 0.09, width: 0.36, height: 0.22, scale: 4 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "date_line_report",
+          source: createOcrCropCanvas(image, { x: 0.00, y: 0.27, width: 0.48, height: 0.12, scale: 4 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        { name: "top_report", source: createOcrCropCanvas(image, { x: 0.00, y: 0.06, width: 0.98, height: 0.34 }) },
+        { name: "participants_report", source: createOcrCropCanvas(image, { x: 0.00, y: 0.42, width: 0.44, height: 0.56 }) },
+        {
           name: "victim_line",
           source: createOcrCropCanvas(image, { x: 0.205, y: 0.155, width: 0.29, height: 0.075, scale: 4 }),
           options: { tessedit_pageseg_mode: "7", preserve_interword_spaces: "1" }
@@ -1511,6 +1563,13 @@ export function initKills({ main, anchor }) {
         {
           name: "victim_header",
           source: createOcrCropCanvas(image, { x: 0.16, y: 0.105, width: 0.43, height: 0.22, scale: 3 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "victim_cjk",
+          source: createOcrCropCanvas(image, { x: 0.16, y: 0.105, width: 0.43, height: 0.22, scale: 3, filter: "none" }),
+          lang: "chi_sim",
+          noWhitelist: true,
           options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
         },
         {
@@ -1557,7 +1616,7 @@ export function initKills({ main, anchor }) {
 
     context.fillStyle = "#020406";
     context.fillRect(0, 0, canvas.width, canvas.height);
-    context.filter = "contrast(190%) brightness(112%) saturate(80%)";
+    context.filter = region.filter || "contrast(190%) brightness(112%) saturate(80%)";
     context.drawImage(
       image,
       sourceX,
@@ -1577,7 +1636,9 @@ export function initKills({ main, anchor }) {
     const detection = blankDetection(text);
     const lines = getOcrLines(text);
     const tagged = parseTaggedNames(lines);
-    const victim = improveVictimCandidate(findVictimCandidate(tagged, lines), tagged);
+    const taggedVictim = findVictimCandidate(tagged, lines);
+    const unicodeVictim = findUnicodeVictimCandidate(lines);
+    const victim = improveVictimCandidate(chooseVictimCandidate(taggedVictim, unicodeVictim), tagged);
     const killer = findKillerCandidate(tagged, lines, victim);
     const date = parseDateFromText(text);
     const time = parseTimeFromText(text);
@@ -1770,10 +1831,124 @@ export function initKills({ main, anchor }) {
   function findVictimCandidate(tagged, lines) {
     const participantIndex = lines.find((line) => /participantes?|participants?/i.test(line.text))?.index ?? Number.POSITIVE_INFINITY;
     return tagged
-      .filter((item) => item.region !== "participants" && item.region !== "participant_first" && item.index < participantIndex)
+      .filter((item) => !["participants", "participants_report", "participant_first", "participant_first_report"].includes(item.region) && item.index < participantIndex)
       .sort((left, right) => scoreVictimCandidate(right) - scoreVictimCandidate(left))[0]
       || findLooseVictimName(lines, participantIndex)
       || null;
+  }
+
+  function findUnicodeVictimCandidate(lines) {
+    const participantIndex = lines.find((line) => /participantes?|participants?/i.test(line.text))?.index ?? Number.POSITIVE_INFINITY;
+    const victimLines = lines
+      .filter((line) => line.index < participantIndex && isVictimRegion(line.region))
+      .map((line) => ({ ...line, name: extractUnicodePilotName(line.text) }))
+      .filter((line) => line.name);
+
+    const candidate = victimLines
+      .sort((left, right) => scoreUnicodeVictimLine(right) - scoreUnicodeVictimLine(left))[0];
+
+    if (!candidate) {
+      return null;
+    }
+
+    return {
+      tag: extractVictimTagFromLines(lines) || "",
+      name: normalizeUnicodePilotName(candidate.name),
+      line: candidate.text,
+      region: candidate.region,
+      index: candidate.index,
+      confidence: candidate.region.includes("cjk") ? 0.62 : 0.58
+    };
+  }
+
+  function normalizeUnicodePilotName(value) {
+    const name = String(value || "").replace(/\s+/g, " ").trim();
+
+    const corrections = {
+      "天 了": "天 子",
+      "天了": "天子"
+    };
+
+    return corrections[name] || name;
+  }
+
+  function chooseVictimCandidate(taggedVictim, unicodeVictim) {
+    if (!taggedVictim) {
+      return unicodeVictim || null;
+    }
+
+    if (!unicodeVictim) {
+      return taggedVictim;
+    }
+
+    if (isSuspiciousPilotName(taggedVictim.name) && countUnicodeLetters(unicodeVictim.name) > 0) {
+      return unicodeVictim;
+    }
+
+    return scoreVictimCandidate(taggedVictim) >= scoreVictimCandidate(unicodeVictim)
+      ? taggedVictim
+      : unicodeVictim;
+  }
+
+  function isSuspiciousPilotName(name) {
+    const value = String(name || "");
+    const unicodeCount = countUnicodeLetters(value);
+    const letters = value.replace(/[^A-Za-z]/g, "");
+
+    if (unicodeCount > 0) {
+      return false;
+    }
+
+    return letters.length < 3 || /[$~{}]/.test(value) || value.split(/\s+/).length > 4;
+  }
+
+  function isVictimRegion(region) {
+    return [
+      "victim_line_report",
+      "victim_header_report",
+      "victim_cjk_report",
+      "victim_line",
+      "victim_header",
+      "victim_cjk",
+      "victim",
+      "top_report",
+      "top"
+    ].includes(region);
+  }
+
+  function extractUnicodePilotName(value) {
+    const text = String(value || "")
+      .replace(/Potencia.*$/i, "")
+      .replace(/impulsos.*$/i, "")
+      .replace(/Muerte.*$/i, "")
+      .replace(/2026.*$/i, "");
+    const matches = text.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}][\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\s・._-]{0,18}/gu) || [];
+    const cleaned = matches
+      .map((match) => match.replace(/[^\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\s・._-]/gu, "").trim())
+      .map((match) => match.replace(/\s+/g, " "))
+      .filter((match) => countUnicodeLetters(match) >= 1 && !/^[一ー-]+$/.test(match))
+      .sort((left, right) => countUnicodeLetters(right) - countUnicodeLetters(left))[0];
+
+    return cleaned || "";
+  }
+
+  function countUnicodeLetters(value) {
+    return (String(value || "").match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu) || []).length;
+  }
+
+  function scoreUnicodeVictimLine(line) {
+    const regionBonus = line.region.includes("cjk") ? 30 : 0;
+    const reportBonus = line.region.includes("report") ? 12 : 0;
+    return countUnicodeLetters(line.name) * 10 + regionBonus + reportBonus - Math.min(20, line.text.length / 8);
+  }
+
+  function extractVictimTagFromLines(lines) {
+    const participantIndex = lines.find((line) => /participantes?|participants?/i.test(line.text))?.index ?? Number.POSITIVE_INFINITY;
+    const tagLine = lines
+      .filter((line) => line.index < participantIndex && isVictimRegion(line.region))
+      .find((line) => /\[\s*[A-Z0-9-]{2,8}/i.test(line.text));
+    const match = tagLine?.text.match(/\[\s*([A-Z0-9-]{2,8})/i);
+    return match ? normalizeCorporationTag(match[1]) : "";
   }
 
   function improveVictimCandidate(victim, tagged) {
@@ -1874,7 +2049,8 @@ export function initKills({ main, anchor }) {
   }
 
   function findKillerCandidate(tagged, lines, victim) {
-    const participantTagged = tagged.filter((item) => item !== victim && !["victim", "victim_header", "victim_line", "top", "date_line", "ship_value"].includes(item.region));
+    const headerRegions = ["victim", "victim_header", "victim_header_report", "victim_line", "victim_line_report", "victim_cjk", "victim_cjk_report", "top", "top_report", "date_line", "date_line_report", "ship_value", "ship_value_report"];
+    const participantTagged = tagged.filter((item) => item !== victim && !headerRegions.includes(item.region));
     const finalBlowIndex = findLineIndex(lines, /golpe\s*de\s*gracia|solpe\s*de\s*grac/i);
     const topDamageIndex = findLineIndex(lines, /da[fñn]o\s*m[aáa]ximo|dano\s*maximo/i);
     const finalBlow = findTaggedBeforeIndex(participantTagged, finalBlowIndex);
@@ -1885,9 +2061,14 @@ export function initKills({ main, anchor }) {
 
   function scoreVictimCandidate(item) {
     const regionScores = {
+      victim_line_report: 104,
       victim_line: 100,
+      victim_header_report: 96,
       victim_header: 92,
+      victim_cjk_report: 92,
+      victim_cjk: 88,
       victim: 86,
+      top_report: 80,
       top: 76,
       full: 50
     };
@@ -1900,11 +2081,18 @@ export function initKills({ main, anchor }) {
 
   function getOcrRegionConfidence(region) {
     const regionScores = {
+      victim_line_report: 0.9,
       victim_line: 0.88,
+      victim_header_report: 0.84,
       victim_header: 0.82,
+      participant_first_report: 0.84,
       participant_first: 0.82,
+      participants_report: 0.78,
       participants: 0.76,
+      victim_cjk_report: 0.72,
+      victim_cjk: 0.68,
       victim: 0.74,
+      top_report: 0.72,
       top: 0.7,
       full: 0.55
     };
@@ -1951,9 +2139,10 @@ export function initKills({ main, anchor }) {
   }
 
   function parseParticipants(text) {
-    const participantRegion = text.match(/OCR_REGION_PARTICIPANTS_HEADER([\s\S]*?)(?:OCR_REGION_|$)/i)
-      || text.match(/OCR_REGION_PARTICIPANTS([\s\S]*?)(?:OCR_REGION_|$)/i);
-    const regionMatch = participantRegion?.[1]?.match(/\[(\d{1,3})\]/);
+    const participantRegion = text.match(/OCR_REGION_PARTICIPANTS_HEADER(?:_REPORT)?\n([\s\S]*?)(?:OCR_REGION_|$)/i)
+      || text.match(/OCR_REGION_PARTICIPANTS(?:_REPORT)?\n([\s\S]*?)(?:OCR_REGION_|$)/i);
+    const regionMatch = participantRegion?.[1]?.match(/[\[\(\|]\s*(\d{1,3})\s*[\]\)]?/)
+      || participantRegion?.[1]?.match(/\b(\d{1,3})\s*[\]\)]/);
 
     if (regionMatch) {
       return Number(regionMatch[1]);
@@ -1965,17 +2154,88 @@ export function initKills({ main, anchor }) {
   }
 
   function parseShip(lines) {
-    const joined = lines.map((line) => line.text).join("\n");
-    const known = [...SHIPS]
-      .sort((left, right) => right.length - left.length)
-      .find((ship) => new RegExp(`\\b${escapeRegExp(ship)}\\b`, "i").test(joined));
+    const regionGroups = [
+      ["ship_value_report", "ship_value"],
+      ["top_report", "top", "victim_header_report", "victim_header"],
+      ["full"]
+    ];
+    const allPriorityRegions = regionGroups.flat();
+    const sortedShips = [...SHIPS].sort((left, right) => right.length - left.length);
 
-    if (known) {
-      return known.replace(/\s+Acorazado$/i, "");
+    for (const group of regionGroups) {
+      const groupText = lines
+        .filter((line) => group.includes(line.region))
+        .map((line) => line.text)
+        .join("\n");
+      const keywordShip = inferShipByKeyword(groupText);
+      const known = sortedShips.find((ship) => hasShipName(groupText, ship));
+
+      if (keywordShip || known) {
+        return (keywordShip || known).replace(/\s+(?:Acorazado|Destructor)$/i, "");
+      }
     }
 
-    const likelyShip = lines.find((line) => /^[A-Z][A-Za-z'\-\s]{3,38}$/.test(line.text) && !line.text.includes("[") && !isEquipmentLine(line.text));
-    return likelyShip?.text || "";
+    const likelyShip = lines.find((line) => allPriorityRegions.includes(line.region)
+      && isLikelyShipLine(line.text)
+      && !line.text.includes("[")
+      && !isEquipmentLine(line.text));
+    return likelyShip?.text?.replace(/\s+(?:Acorazado|Destructor)$/i, "") || "";
+  }
+
+  function inferShipByKeyword(text) {
+    const normalized = normalizeShipText(text);
+    const rules = [
+      [/ raven (?:modelo|modeto|medelo|moclelo|madeio|ney|navy).*navy | raven modelo n(?:a|e)vy | raven modelo ney /, "Raven modelo Navy"],
+      [/ raven de ataque | raven .* ataque /, "Raven de ataque"],
+      [/ apocalypse (?:de ataque|ataque)| apoc(?:a|o)?lypse .* ataque /, "Apocalypse de ataque"],
+      [/ apocalypse .* navy | apocalypse modelo /, "Apocalypse modelo Navy"],
+      [/ nidhoggur | nidhogqur | nidhoggur modelo /, "Nidhoggur modelo de la flota"],
+      [/ machariel | machariei | machariel /, "Machariel"],
+      [/ marzio | marsio | marzlo /, "Marzio"],
+      [/ endurer | endurcr | enduret /, "Endurer"],
+      [/ rattlesnake | rattiesnake /, "Rattlesnake"],
+      [/ nightmare /, "Nightmare"],
+      [/ vindicator /, "Vindicator"],
+      [/ bhaalgorn /, "Bhaalgorn"],
+      [/ typhoon ii | typhoon 11 /, "Typhoon II"],
+      [/ astarte /, "Astarte"],
+      [/ rokh /, "Rokh"]
+    ];
+
+    return rules
+      .map(([pattern, ship]) => {
+        const match = normalized.match(pattern);
+        return match ? { ship, index: match.index } : null;
+      })
+      .filter(Boolean)
+      .sort((left, right) => left.index - right.index)[0]?.ship || "";
+  }
+
+  function isLikelyShipLine(value) {
+    const text = String(value || "").trim();
+    const letters = text.replace(/[^A-Za-z]/g, "").length;
+
+    if (letters < 5 || text.length > 42 || !/^[A-Z][A-Za-z0-9'\-\s]{3,42}$/.test(text)) {
+      return false;
+    }
+
+    return !/\b(?:informe|muertes|dano|danio|daño|total|isk|utc|muerte|potencia|impulsos|ranura|pith|golpe)\b/i.test(text);
+  }
+
+  function hasShipName(text, ship) {
+    const normalizedText = normalizeShipText(text);
+    const normalizedShip = normalizeShipText(ship);
+    return normalizedText.includes(` ${normalizedShip} `);
+  }
+
+  function normalizeShipText(value) {
+    return ` ${String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()} `;
   }
 
   function normalizeCorporationTag(value) {
@@ -1992,7 +2252,11 @@ export function initKills({ main, anchor }) {
       RSBP: "RSCP",
       R5BP: "RSCP",
       RS8P: "RSCP",
-      RSEPI: "RSCP"
+      RSEPI: "RSCP",
+      UTAI: "UTA",
+      UTAL: "UTA",
+      UTALX: "UTA",
+      UTA1: "UTA"
     };
 
     return corrections[tag] || tag;
@@ -2006,7 +2270,7 @@ export function initKills({ main, anchor }) {
       .replace(/\bISK\b/gi, "")
       .replace(/\s*&\s*(?:ln|in|l|pe|pa|oak|<3).*$/i, "")
       .replace(/\s+\d{1,3}\s*[&_.\u00b0%-].*$/i, "")
-      .replace(/\s+(?:Machariel|Raven|Nightmare|Rattlesnake|Vindicator|Nidhoggur|Nereus|Navy|Acorazado|Dafio|Dano|Danio|UTC|Muerte|Potencia)\b.*$/i, "")
+      .replace(/\s+(?:Marzio|Machariel|Raven|Nightmare|Rattlesnake|Vindicator|Nidhoggur|Nereus|Navy|Acorazado|Dafio|Dano|Danio|UTC|Muerte|Potencia)\b.*$/i, "")
       .replace(/\s+(?:po\s+LS|po|LS|Bo|Re|RR|Lr|Pit|Pith|Pith.*|Lanza.*|Dafi.*|Dano.*|Daño.*)$/i, "")
       .trim();
 
@@ -2053,17 +2317,17 @@ export function initKills({ main, anchor }) {
     return tokens
       .join(" ")
       .replace(/\s+[&_.\u00b0%-]+$/g, "")
-      .replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "")
+      .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
       .trim();
   }
 
   function isOcrNoiseToken(token) {
-    const clean = String(token || "").replace(/[^A-Za-z0-9-]/g, "");
+    const clean = String(token || "").replace(/[^\p{L}\p{N}-]/gu, "");
     if (!clean) {
       return true;
     }
 
-    if (!/[A-Za-z]/.test(clean)) {
+    if (!/\p{L}/u.test(clean)) {
       return true;
     }
 
@@ -2076,10 +2340,10 @@ export function initKills({ main, anchor }) {
 
   function isLikelyPilotName(name, sourceLine = "") {
     if (!name || name.length < 3 || name.length > 34) {
-      return false;
+      return countUnicodeLetters(name) > 0 && name.length >= 1 && name.length <= 18;
     }
 
-    if (!/[A-Za-z]/.test(name)) {
+    if (!/[A-Za-z]/.test(name) && countUnicodeLetters(name) === 0) {
       return false;
     }
 
@@ -2093,6 +2357,10 @@ export function initKills({ main, anchor }) {
 
     const letters = name.toLowerCase().replace(/[^a-z]/g, "");
     if (letters.length >= 6 && new Set(letters).size <= 3) {
+      return false;
+    }
+
+    if (isSuspiciousPilotName(name)) {
       return false;
     }
 
