@@ -44,6 +44,9 @@ const OCR_FIELDS = [
 ];
 
 const SHIPS = [
+  "Raven modelo Navy Acorazado",
+  "Raven modelo Navy",
+  "Raven Navy Issue",
   "Machariel",
   "Nightmare",
   "Rattlesnake",
@@ -1460,10 +1463,23 @@ export function initKills({ main, anchor }) {
     try {
       const tesseract = await import("tesseract.js");
       const engine = tesseract.default || tesseract;
-      const result = await engine.recognize(file, "eng", {
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]/:-,. ISKisk"
-      });
-      return parseKillReportText(result?.data?.text || "");
+      const targets = await createKillOcrTargets(file);
+      const regions = [];
+
+      for (const target of targets) {
+        try {
+          const result = await engine.recognize(target.source, "eng", {
+            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]/:-,. ISKisk%<>|& aeiouAEIOU"
+          });
+          regions.push(`OCR_REGION_${target.name.toUpperCase()}\n${result?.data?.text || ""}`);
+        } catch (error) {
+          console.warn(`OCR region ${target.name} fallida`, error);
+        }
+      }
+
+      const text = regions.join("\n");
+
+      return parseKillReportText(text);
     } catch (error) {
       console.error(error);
       return {
@@ -1474,15 +1490,65 @@ export function initKills({ main, anchor }) {
     }
   }
 
+  async function createKillOcrTargets(file) {
+    const fallback = [{ name: "full", source: file }];
+
+    try {
+      const imageUrl = URL.createObjectURL(file);
+      const image = await loadImage(imageUrl);
+      URL.revokeObjectURL(imageUrl);
+
+      if (image.width < 600 || image.height < 320) {
+        return fallback;
+      }
+
+      return [
+        { name: "top", source: createOcrCropCanvas(image, { x: 0.16, y: 0.05, width: 0.68, height: 0.33 }) },
+        { name: "participants", source: createOcrCropCanvas(image, { x: 0.16, y: 0.36, width: 0.36, height: 0.46 }) },
+        { name: "victim", source: createOcrCropCanvas(image, { x: 0.20, y: 0.11, width: 0.33, height: 0.20 }) },
+        ...fallback
+      ];
+    } catch (error) {
+      console.warn("No se pudo preparar la imagen para OCR por regiones.", error);
+      return fallback;
+    }
+  }
+
+  function createOcrCropCanvas(image, region) {
+    const sourceX = Math.round(image.naturalWidth * region.x);
+    const sourceY = Math.round(image.naturalHeight * region.y);
+    const sourceWidth = Math.round(image.naturalWidth * region.width);
+    const sourceHeight = Math.round(image.naturalHeight * region.height);
+    const scale = 2;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, sourceWidth * scale);
+    canvas.height = Math.max(1, sourceHeight * scale);
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+
+    context.fillStyle = "#020406";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.filter = "contrast(190%) brightness(112%) saturate(80%)";
+    context.drawImage(
+      image,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    return canvas;
+  }
+
   function parseKillReportText(text) {
     const detection = blankDetection(text);
-    const lines = text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
+    const lines = getOcrLines(text);
     const tagged = parseTaggedNames(lines);
-    const victim = tagged[0];
-    const killer = tagged.length > 1 ? tagged[tagged.length - 1] : tagged[0];
+    const victim = findVictimCandidate(tagged, lines);
+    const killer = findKillerCandidate(tagged, lines, victim);
     const date = parseDateFromText(text);
     const time = parseTimeFromText(text);
     const isk = parseIskFromText(text);
@@ -1498,9 +1564,9 @@ export function initKills({ main, anchor }) {
 
     if (victim?.name) {
       detection.data.victim = victim.name;
-      detection.data.victimCorporation = victim.tag;
-      detection.confidence.victim = 0.82;
-      detection.confidence.victimCorporation = 0.78;
+      detection.data.victimCorporation = victim.tag || "";
+      detection.confidence.victim = victim.confidence || 0.82;
+      detection.confidence.victimCorporation = victim.tag ? 0.78 : 0.35;
     }
 
     if (ship) {
@@ -1535,6 +1601,29 @@ export function initKills({ main, anchor }) {
       .map((field) => `Revisar ${field}: baja confianza OCR.`);
     detection.needsReview = detection.warnings.length > 0;
     return detection;
+  }
+
+  function getOcrLines(text) {
+    const lines = [];
+    let region = "full";
+
+    for (const rawLine of String(text || "").split(/\r?\n/)) {
+      const line = rawLine.trim();
+
+      if (!line) {
+        continue;
+      }
+
+      const regionMatch = line.match(/^OCR_REGION_([A-Z_]+)/);
+      if (regionMatch) {
+        region = regionMatch[1].toLowerCase();
+        continue;
+      }
+
+      lines.push({ text: line, region, index: lines.length });
+    }
+
+    return lines;
   }
 
   function fillDraftFromDetection(draft, detection) {
@@ -1575,18 +1664,115 @@ export function initKills({ main, anchor }) {
     const matches = [];
 
     for (const line of lines) {
-      const tagMatch = line.match(/\[([A-Za-z0-9-]{2,8})\]\s*([^\[\]\n\r]+)/);
+      const parsed = parseTaggedNameFromLine(line.text, line.region);
 
-      if (tagMatch) {
-        const name = normalizeName(tagMatch[2]);
+      if (!parsed) {
+        continue;
+      }
 
-        if (name && !/isk|kill|report|destroyed|destru/i.test(name)) {
-          matches.push({ tag: tagMatch[1].toUpperCase(), name, line });
-        }
+      const name = normalizePilotName(parsed.name, parsed.missingClose);
+
+      if (isLikelyPilotName(name, line.text)) {
+        matches.push({
+          tag: normalizeCorporationTag(parsed.tag),
+          name,
+          line: line.text,
+          region: line.region,
+          index: line.index
+        });
       }
     }
 
     return matches;
+  }
+
+  function parseTaggedNameFromLine(line, region = "full") {
+    const normalTag = line.match(/\[\s*([A-Za-z0-9-]{2,8})\s*\]\s*([^\[\]\n\r]+)/);
+    if (normalTag) {
+      return { tag: normalTag[1], name: normalTag[2] };
+    }
+
+    const pipeTag = line.match(/\[\s*([A-Za-z0-9-]{2,8})\s*[\|Il]\s*([^\[\]\n\r]+)/);
+    if (pipeTag) {
+      return { tag: pipeTag[1], name: pipeTag[2] };
+    }
+
+    const missingCloseTag = line.match(/\[\s*([A-Z0-9]{2,5})([A-ZJIl][A-Za-z0-9][^\[\]\n\r]{1,42})/);
+    if (missingCloseTag) {
+      return { tag: missingCloseTag[1], name: missingCloseTag[2], missingClose: true };
+    }
+
+    const looseTag = region === "victim"
+      ? line.match(/\b([A-Z0-9]{2,8})\s*[\|Il]\s*([A-Za-z0-9][A-Za-z0-9 _.'-]{2,36})/)
+      : null;
+    if (looseTag) {
+      return { tag: looseTag[1], name: looseTag[2] };
+    }
+
+    return null;
+  }
+
+  function findVictimCandidate(tagged, lines) {
+    const participantIndex = lines.find((line) => /participantes?|participants?/i.test(line.text))?.index ?? Number.POSITIVE_INFINITY;
+    return tagged.find((item) => item.region === "victim")
+      || findLooseVictimName(lines, participantIndex)
+      || tagged.find((item) => item.region !== "participants" && item.index < participantIndex)
+      || null;
+  }
+
+  function findLooseVictimName(lines, participantIndex) {
+    const ignored = /^(?:informe|muertes?|muerte|raven|modelo|navy|acorazado|dario|dafio|danio|dano|daño|total|potencia|codificadores|impulsos|utc|isk|scalding|pass|participantes?)$/i;
+    const sourceLines = lines.filter((line) => ["top", "victim", "full"].includes(line.region) && line.index < participantIndex);
+
+    for (const line of sourceLines) {
+      const tokens = line.text.match(/[A-Za-z][A-Za-z0-9]{3,22}/g) || [];
+
+      for (const token of tokens) {
+        const name = normalizePilotName(token);
+
+        if (ignored.test(name) || !/[a-z][A-Z]/.test(name)) {
+          continue;
+        }
+
+        if (isLikelyPilotName(name, name)) {
+          return {
+            tag: "",
+            name,
+            line: line.text,
+            region: line.region,
+            index: line.index,
+            confidence: name.length >= 5 ? 0.66 : 0.55
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function findKillerCandidate(tagged, lines, victim) {
+    const participantTagged = tagged.filter((item) => item !== victim && item.region !== "victim");
+    const finalBlowIndex = findLineIndex(lines, /golpe\s*de\s*gracia|solpe\s*de\s*grac/i);
+    const topDamageIndex = findLineIndex(lines, /da[fñn]o\s*m[aáa]ximo|dano\s*maximo/i);
+    const finalBlow = findTaggedBeforeIndex(participantTagged, finalBlowIndex);
+    const topDamage = findTaggedBeforeIndex(participantTagged, topDamageIndex);
+
+    return finalBlow || topDamage || participantTagged[0] || tagged.find((item) => item !== victim) || tagged[0];
+  }
+
+  function findLineIndex(lines, pattern) {
+    const found = lines.find((line) => pattern.test(line.text));
+    return found ? found.index : -1;
+  }
+
+  function findTaggedBeforeIndex(tagged, lineIndex) {
+    if (lineIndex < 0) {
+      return null;
+    }
+
+    return tagged
+      .filter((item) => item.index <= lineIndex)
+      .sort((left, right) => right.index - left.index)[0] || null;
   }
 
   function parseIskFromText(text) {
@@ -1613,27 +1799,88 @@ export function initKills({ main, anchor }) {
   }
 
   function parseParticipants(text) {
-    const match = text.match(/(\d{1,3})\s*(?:participants|participant|pilots|attackers|atacantes|participantes)/i);
+    const participantRegion = text.match(/OCR_REGION_PARTICIPANTS([\s\S]*?)(?:OCR_REGION_|$)/i);
+    const regionMatch = participantRegion?.[1]?.match(/\[(\d{1,3})\]/);
+
+    if (regionMatch) {
+      return Number(regionMatch[1]);
+    }
+
+    const match = text.match(/(?:participants?|participantes?|pilots|attackers|atacantes)\s*[\[\(:|Il]?\s*(\d{1,3})/i)
+      || text.match(/(\d{1,3})\s*(?:participants|participant|pilots|attackers|atacantes|participantes)/i);
     return match ? Number(match[1]) : 1;
   }
 
   function parseShip(lines) {
-    const joined = lines.join("\n");
-    const known = SHIPS.find((ship) => new RegExp(`\\b${ship}\\b`, "i").test(joined));
+    const joined = lines.map((line) => line.text).join("\n");
+    const known = [...SHIPS]
+      .sort((left, right) => right.length - left.length)
+      .find((ship) => new RegExp(`\\b${escapeRegExp(ship)}\\b`, "i").test(joined));
 
     if (known) {
-      return known;
+      return known.replace(/\s+Acorazado$/i, "");
     }
 
-    return lines.find((line) => /^[A-Z][A-Za-z'\-\s]{3,32}$/.test(line) && !line.includes("[")) || "";
+    const likelyShip = lines.find((line) => /^[A-Z][A-Za-z'\-\s]{3,38}$/.test(line.text) && !line.text.includes("[") && !isEquipmentLine(line.text));
+    return likelyShip?.text || "";
   }
 
-  function normalizeName(value) {
+  function normalizeCorporationTag(value) {
     return String(value || "")
+      .replace(/[^A-Za-z0-9-]/g, "")
+      .toUpperCase()
+      .slice(0, 8);
+  }
+
+  function normalizePilotName(value, fromBrokenTag = false) {
+    let name = String(value || "")
       .replace(/\s+/g, " ")
       .replace(/[|]+/g, "")
       .replace(/\bISK\b/gi, "")
+      .replace(/\s*&\s*(?:ln|in|l|pe|pa|oak|<3).*$/i, "")
+      .replace(/\s+(?:po\s+LS|po|LS|Bo|Re|RR|Lr|Pit|Pith|Pith.*|Lanza.*|Dafi.*|Dano.*|Daño.*)$/i, "")
       .trim();
+
+    name = name.replace(/^[\]\|]+/, "");
+    if (fromBrokenTag) {
+      name = name.replace(/^[JIl](?=[A-Za-z0-9])/, "");
+    }
+    name = name.replace(/^J(?=[A-Z][a-z]+[0-9])/, "");
+    name = name.replace(/\s+\d{1,3}%?$/, "").trim();
+
+    if (/^[a-z][a-z]+[A-Z]/.test(name)) {
+      name = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+    }
+
+    return name;
+  }
+
+  function isLikelyPilotName(name, sourceLine = "") {
+    if (!name || name.length < 3 || name.length > 34) {
+      return false;
+    }
+
+    if (!/[A-Za-z]/.test(name)) {
+      return false;
+    }
+
+    if (/^[a-z]{4,}$/.test(name)) {
+      return false;
+    }
+
+    if (isEquipmentLine(`${sourceLine} ${name}`)) {
+      return false;
+    }
+
+    return !/informe|muerte|participantes?|codificadores|impulsos|scalding|pass|modelo|acorazado|ranura|pith|lanzamisiles|dafi|daño|dano/i.test(name);
+  }
+
+  function isEquipmentLine(value) {
+    return /ranura|pith|lanzamisiles|misiles|tipo\s+c|superior|inferior|golpe\s*de\s*gracia|da[fñn]o\s*m[aáa]ximo|participantes?|muerte|informe|potencia|codificadores|impulsos|scalding|pass/i.test(value);
+  }
+
+  function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   function getConfidenceClass(value) {
