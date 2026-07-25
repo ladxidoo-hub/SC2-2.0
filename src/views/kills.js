@@ -1505,12 +1505,37 @@ export function initKills({ main, anchor }) {
       return [
         {
           name: "victim_line",
-          source: createOcrCropCanvas(image, { x: 0.24, y: 0.162, width: 0.15, height: 0.056, scale: 3 }),
-          options: { tessedit_pageseg_mode: "7" }
+          source: createOcrCropCanvas(image, { x: 0.205, y: 0.155, width: 0.29, height: 0.075, scale: 4 }),
+          options: { tessedit_pageseg_mode: "7", preserve_interword_spaces: "1" }
         },
-        { name: "top", source: createOcrCropCanvas(image, { x: 0.16, y: 0.05, width: 0.68, height: 0.33 }) },
-        { name: "participants", source: createOcrCropCanvas(image, { x: 0.16, y: 0.36, width: 0.36, height: 0.46 }) },
-        { name: "victim", source: createOcrCropCanvas(image, { x: 0.20, y: 0.11, width: 0.33, height: 0.20 }) },
+        {
+          name: "victim_header",
+          source: createOcrCropCanvas(image, { x: 0.16, y: 0.105, width: 0.43, height: 0.22, scale: 3 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "participants_header",
+          source: createOcrCropCanvas(image, { x: 0.16, y: 0.43, width: 0.30, height: 0.08, scale: 4 }),
+          options: { tessedit_pageseg_mode: "7", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "participant_first",
+          source: createOcrCropCanvas(image, { x: 0.18, y: 0.50, width: 0.28, height: 0.14, scale: 4 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "ship_value",
+          source: createOcrCropCanvas(image, { x: 0.60, y: 0.13, width: 0.28, height: 0.22, scale: 3 }),
+          options: { tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" }
+        },
+        {
+          name: "date_line",
+          source: createOcrCropCanvas(image, { x: 0.16, y: 0.32, width: 0.34, height: 0.10, scale: 4 }),
+          options: { tessedit_pageseg_mode: "7", preserve_interword_spaces: "1" }
+        },
+        { name: "top", source: createOcrCropCanvas(image, { x: 0.15, y: 0.06, width: 0.70, height: 0.34 }) },
+        { name: "participants", source: createOcrCropCanvas(image, { x: 0.16, y: 0.43, width: 0.36, height: 0.46 }) },
+        { name: "victim", source: createOcrCropCanvas(image, { x: 0.18, y: 0.11, width: 0.38, height: 0.22 }) },
         ...fallback
       ];
     } catch (error) {
@@ -1552,7 +1577,7 @@ export function initKills({ main, anchor }) {
     const detection = blankDetection(text);
     const lines = getOcrLines(text);
     const tagged = parseTaggedNames(lines);
-    const victim = findVictimCandidate(tagged, lines);
+    const victim = improveVictimCandidate(findVictimCandidate(tagged, lines), tagged);
     const killer = findKillerCandidate(tagged, lines, victim);
     const date = parseDateFromText(text);
     const time = parseTimeFromText(text);
@@ -1684,7 +1709,7 @@ export function initKills({ main, anchor }) {
           line: line.text,
           region: line.region,
           index: line.index,
-          confidence: parsed.confidence
+          confidence: parsed.confidence || getOcrRegionConfidence(line.region)
         });
       }
     }
@@ -1693,9 +1718,19 @@ export function initKills({ main, anchor }) {
   }
 
   function parseTaggedNameFromLine(line, region = "full") {
+    const knownTag = line.match(/\[\s*(SC2|FAB|RSCP|FTL|RTI|IU|RSC[P]?)\s*[\]\|Il]?\s*([A-ZJIl][A-Za-z0-9][^\[\]\n\r]{1,60})/i);
+    if (knownTag) {
+      return {
+        tag: knownTag[1],
+        name: knownTag[2],
+        missingClose: !line.includes("]"),
+        confidence: region === "participants" || region === "participant_first" ? 0.82 : 0.9
+      };
+    }
+
     if (region === "victim_line") {
       const compactLine = line.replace(/\s+/g, "");
-      const compactBroken = compactLine.match(/\[?([A-Z0-9]{3,4})([A-ZJIl][A-Za-z0-9]{2,34})/);
+      const compactBroken = compactLine.match(/\[?([A-Z0-9]{3,4})[\]\|Il]?([A-ZJIl][A-Za-z0-9]{2,34})/);
 
       if (compactBroken) {
         return {
@@ -1734,11 +1769,78 @@ export function initKills({ main, anchor }) {
 
   function findVictimCandidate(tagged, lines) {
     const participantIndex = lines.find((line) => /participantes?|participants?/i.test(line.text))?.index ?? Number.POSITIVE_INFINITY;
-    return tagged.find((item) => item.region === "victim_line")
-      || tagged.find((item) => item.region === "victim")
+    return tagged
+      .filter((item) => item.region !== "participants" && item.region !== "participant_first" && item.index < participantIndex)
+      .sort((left, right) => scoreVictimCandidate(right) - scoreVictimCandidate(left))[0]
       || findLooseVictimName(lines, participantIndex)
-      || tagged.find((item) => item.region !== "participants" && item.index < participantIndex)
       || null;
+  }
+
+  function improveVictimCandidate(victim, tagged) {
+    if (!victim || victim.name.includes(" ")) {
+      return victim;
+    }
+
+    const compactVictim = compactNameForCompare(victim.name);
+    const spacingSource = tagged
+      .filter((item) => item !== victim
+        && item.name.includes(" ")
+        && (!victim.tag || !item.tag || item.tag === victim.tag)
+        && ["victim_header", "victim", "top"].includes(item.region))
+      .sort((left, right) => scoreVictimCandidate(right) - scoreVictimCandidate(left))
+      .find((item) => areCompactNamesClose(compactVictim, compactNameForCompare(item.name)));
+
+    if (!spacingSource) {
+      return victim;
+    }
+
+    return {
+      ...victim,
+      name: applyNameSpacing(victim.name, spacingSource.name),
+      confidence: Math.max(victim.confidence || 0, spacingSource.confidence || 0)
+    };
+  }
+
+  function compactNameForCompare(value) {
+    return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  function areCompactNamesClose(left, right) {
+    if (!left || !right || Math.abs(left.length - right.length) > 2) {
+      return false;
+    }
+
+    let mismatches = Math.abs(left.length - right.length);
+    const limit = Math.min(left.length, right.length);
+    for (let index = 0; index < limit; index += 1) {
+      if (left[index] !== right[index]) {
+        mismatches += 1;
+      }
+    }
+
+    return mismatches <= 2;
+  }
+
+  function applyNameSpacing(value, spacingTemplate) {
+    const raw = String(value || "").replace(/\s+/g, "");
+    const templateParts = String(spacingTemplate || "").split(/\s+/).filter(Boolean);
+    const output = [];
+    let cursor = 0;
+
+    for (const part of templateParts) {
+      if (cursor >= raw.length) {
+        break;
+      }
+
+      output.push(raw.slice(cursor, cursor + part.length));
+      cursor += part.length;
+    }
+
+    if (cursor < raw.length) {
+      output.push(raw.slice(cursor));
+    }
+
+    return output.join(" ").trim() || value;
   }
 
   function findLooseVictimName(lines, participantIndex) {
@@ -1772,13 +1874,42 @@ export function initKills({ main, anchor }) {
   }
 
   function findKillerCandidate(tagged, lines, victim) {
-    const participantTagged = tagged.filter((item) => item !== victim && item.region !== "victim");
+    const participantTagged = tagged.filter((item) => item !== victim && !["victim", "victim_header", "victim_line", "top", "date_line", "ship_value"].includes(item.region));
     const finalBlowIndex = findLineIndex(lines, /golpe\s*de\s*gracia|solpe\s*de\s*grac/i);
     const topDamageIndex = findLineIndex(lines, /da[fñn]o\s*m[aáa]ximo|dano\s*maximo/i);
     const finalBlow = findTaggedBeforeIndex(participantTagged, finalBlowIndex);
     const topDamage = findTaggedBeforeIndex(participantTagged, topDamageIndex);
 
     return finalBlow || topDamage || participantTagged[0] || tagged.find((item) => item !== victim) || tagged[0];
+  }
+
+  function scoreVictimCandidate(item) {
+    const regionScores = {
+      victim_line: 100,
+      victim_header: 92,
+      victim: 86,
+      top: 76,
+      full: 50
+    };
+
+    const regionScore = regionScores[item.region] || 40;
+    const tagBonus = item.tag ? 8 : 0;
+    const nameBonus = item.name.includes(" ") ? 4 : 0;
+    return regionScore + tagBonus + nameBonus + Math.round((item.confidence || 0) * 10);
+  }
+
+  function getOcrRegionConfidence(region) {
+    const regionScores = {
+      victim_line: 0.88,
+      victim_header: 0.82,
+      participant_first: 0.82,
+      participants: 0.76,
+      victim: 0.74,
+      top: 0.7,
+      full: 0.55
+    };
+
+    return regionScores[region] || 0.58;
   }
 
   function findLineIndex(lines, pattern) {
@@ -1820,7 +1951,8 @@ export function initKills({ main, anchor }) {
   }
 
   function parseParticipants(text) {
-    const participantRegion = text.match(/OCR_REGION_PARTICIPANTS([\s\S]*?)(?:OCR_REGION_|$)/i);
+    const participantRegion = text.match(/OCR_REGION_PARTICIPANTS_HEADER([\s\S]*?)(?:OCR_REGION_|$)/i)
+      || text.match(/OCR_REGION_PARTICIPANTS([\s\S]*?)(?:OCR_REGION_|$)/i);
     const regionMatch = participantRegion?.[1]?.match(/\[(\d{1,3})\]/);
 
     if (regionMatch) {
@@ -1857,6 +1989,9 @@ export function initKills({ main, anchor }) {
       R5EP: "RSCP",
       RSFP: "RSCP",
       RSCF: "RSCP",
+      RSBP: "RSCP",
+      R5BP: "RSCP",
+      RS8P: "RSCP",
       RSEPI: "RSCP"
     };
 
@@ -1867,12 +2002,15 @@ export function initKills({ main, anchor }) {
     let name = String(value || "")
       .replace(/\s+/g, " ")
       .replace(/[|]+/g, "")
+      .replace(/[<>].*$/g, "")
       .replace(/\bISK\b/gi, "")
       .replace(/\s*&\s*(?:ln|in|l|pe|pa|oak|<3).*$/i, "")
+      .replace(/\s+\d{1,3}\s*[&_.\u00b0%-].*$/i, "")
+      .replace(/\s+(?:Machariel|Raven|Nightmare|Rattlesnake|Vindicator|Nidhoggur|Nereus|Navy|Acorazado|Dafio|Dano|Danio|UTC|Muerte|Potencia)\b.*$/i, "")
       .replace(/\s+(?:po\s+LS|po|LS|Bo|Re|RR|Lr|Pit|Pith|Pith.*|Lanza.*|Dafi.*|Dano.*|Daño.*)$/i, "")
       .trim();
 
-    name = name.replace(/^[\]\|]+/, "");
+    name = name.replace(/^[\]\|:;'"`.,_-]+/, "");
     if (fromBrokenTag) {
       name = name.replace(/^[JIl](?=[A-Za-z0-9])/, "");
     }
@@ -1880,12 +2018,60 @@ export function initKills({ main, anchor }) {
     name = name.replace(/I(?=o)/g, "l");
     name = name.replace(/HUK\b/g, "HuK");
     name = name.replace(/\s+\d{1,3}%?$/, "").trim();
+    name = stripTrailingOcrNoise(name);
+    name = applyKnownPilotCorrections(name);
 
     if (/^[a-z][a-z]+[A-Z]/.test(name)) {
       name = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
     }
 
     return name;
+  }
+
+  function applyKnownPilotCorrections(value) {
+    const name = String(value || "").trim();
+    const compact = name.replace(/[^A-Za-z0-9]/g, "").toUpperCase().replace(/0/g, "O");
+
+    if (compact === "ZOLUS") {
+      return "ZoLus";
+    }
+
+    if (["BUIOHUK", "BULOHUK", "JLOHUK", "JIOHUK", "SJLOHUK"].includes(compact)) {
+      return "SJloHuK";
+    }
+
+    return name;
+  }
+
+  function stripTrailingOcrNoise(value) {
+    const tokens = String(value || "").split(/\s+/).filter(Boolean);
+
+    while (tokens.length > 1 && isOcrNoiseToken(tokens[tokens.length - 1])) {
+      tokens.pop();
+    }
+
+    return tokens
+      .join(" ")
+      .replace(/\s+[&_.\u00b0%-]+$/g, "")
+      .replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "")
+      .trim();
+  }
+
+  function isOcrNoiseToken(token) {
+    const clean = String(token || "").replace(/[^A-Za-z0-9-]/g, "");
+    if (!clean) {
+      return true;
+    }
+
+    if (!/[A-Za-z]/.test(clean)) {
+      return true;
+    }
+
+    if (clean.length === 1) {
+      return true;
+    }
+
+    return /^[A-Z0-9-]{1,3}$/.test(clean) && !/[a-z]/.test(clean);
   }
 
   function isLikelyPilotName(name, sourceLine = "") {
@@ -1901,7 +2087,16 @@ export function initKills({ main, anchor }) {
       return false;
     }
 
-    if (isEquipmentLine(`${sourceLine} ${name}`)) {
+    if (/([A-Za-z])\1{3,}/.test(name)) {
+      return false;
+    }
+
+    const letters = name.toLowerCase().replace(/[^a-z]/g, "");
+    if (letters.length >= 6 && new Set(letters).size <= 3) {
+      return false;
+    }
+
+    if (isEquipmentLine(name)) {
       return false;
     }
 
