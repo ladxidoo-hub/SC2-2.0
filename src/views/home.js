@@ -124,13 +124,8 @@ export function renderHome() {
               <strong>Gestor de Eventos</strong>
               <span>Mineria, PvE, PvP, participaciones automaticas e historial por miembro.</span>
             </a>
-            <a class="module-tile" href="#/kills">
-              <span class="module-kicker">04</span>
-              <strong>Kill del Mes</strong>
-              <span>Ranking mensual, historial, estadisticas, busqueda, perfiles y OCR de reportes.</span>
-            </a>
             <a class="module-tile" href="#/admin">
-              <span class="module-kicker">05</span>
+              <span class="module-kicker">04</span>
               <strong>Corp Command</strong>
               <span>Panel local para miembros, alters, EX-CORP, lista negra y respaldos JSON.</span>
             </a>

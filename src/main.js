@@ -5,7 +5,6 @@ import "./styles/roles.css";
 import "./styles/guides.css";
 import "./styles/admin.css";
 import "./styles/events.css";
-import "./styles/kills.css";
 
 import { renderHome, initHome } from "./views/home.js";
 import { renderRules, initRules } from "./views/rules.js";
@@ -13,7 +12,6 @@ import { renderRoles, initRoles } from "./views/roles.js";
 import { renderGuides, initGuides } from "./views/guides.js";
 import { renderAdmin, initAdmin } from "./views/admin.js";
 import { renderEvents, initEvents } from "./views/events.js";
-import { renderKills, initKills } from "./views/kills.js";
 
 const routes = {
   inicio: {
@@ -27,12 +25,6 @@ const routes = {
     title: "Gestor de Eventos",
     render: renderEvents,
     init: initEvents
-  },
-  kills: {
-    label: "Kills",
-    title: "Kill del Mes",
-    render: renderKills,
-    init: initKills
   },
   reglamento: {
     label: "Reglamento",

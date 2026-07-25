@@ -10,7 +10,6 @@
 -- - corp-command: miembros, alters, EX-CORP y lista negra.
 -- - guides-library: biblioteca de guias.
 -- - community-events: miembros de eventos, eventos y participaciones.
--- - monthly-kills: Kill del Mes, ranking, historial y perfiles.
 
 create table if not exists public.app_state (
   id text primary key,
@@ -28,20 +27,20 @@ create policy "app_state_corp_command_read"
   on public.app_state
   for select
   to anon
-  using (id in ('corp-command', 'guides-library', 'community-events', 'monthly-kills'));
+  using (id in ('corp-command', 'guides-library', 'community-events'));
 
 create policy "app_state_corp_command_insert"
   on public.app_state
   for insert
   to anon
-  with check (id in ('corp-command', 'guides-library', 'community-events', 'monthly-kills'));
+  with check (id in ('corp-command', 'guides-library', 'community-events'));
 
 create policy "app_state_corp_command_update"
   on public.app_state
   for update
   to anon
-  using (id in ('corp-command', 'guides-library', 'community-events', 'monthly-kills'))
-  with check (id in ('corp-command', 'guides-library', 'community-events', 'monthly-kills'));
+  using (id in ('corp-command', 'guides-library', 'community-events'))
+  with check (id in ('corp-command', 'guides-library', 'community-events'));
 
 grant usage on schema public to anon;
 grant select, insert, update on public.app_state to anon;
@@ -80,18 +79,6 @@ values (
     'members', '[]'::jsonb,
     'events', '[]'::jsonb,
     'participations', '[]'::jsonb
-  )
-)
-on conflict (id) do nothing;
-
-insert into public.app_state (id, data)
-values (
-  'monthly-kills',
-  jsonb_build_object(
-    'app', 'SC2 Kill del Mes',
-    'version', 1,
-    'exportedAt', now(),
-    'kills', '[]'::jsonb
   )
 )
 on conflict (id) do nothing;

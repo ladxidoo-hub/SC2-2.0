@@ -80,10 +80,6 @@ function renderAdminPanel() {
             <span class="admin-nav-mark" aria-hidden="true"></span>
             Lista Negra
           </button>
-          <button class="admin-nav-item" type="button" data-admin-link="#/kills/admin">
-            <span class="admin-nav-mark" aria-hidden="true"></span>
-            Kills
-          </button>
         </nav>
 
         <div class="admin-sidebar-readout" id="adminSidebarReadout" aria-label="Resumen rapido"></div>

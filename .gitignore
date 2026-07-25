@@ -9,3 +9,4 @@ dist/
 npm-debug.log*
 *.zip
 *.traineddata
+kill-del-mes/
