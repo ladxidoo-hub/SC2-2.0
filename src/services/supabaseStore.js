@@ -4,6 +4,7 @@ const DEFAULT_TABLE_NAME = "app_state";
 const APP_STATE_ID = "corp-command";
 const GUIDES_STATE_ID = "guides-library";
 const EVENTS_STATE_ID = "community-events";
+const KILLS_STATE_ID = "monthly-kills";
 
 const supabaseUrl = normalizeSupabaseUrl(import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL);
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
@@ -68,6 +69,14 @@ export async function loadEventsState() {
 
 export async function saveEventsState(payload) {
   return saveAppState(EVENTS_STATE_ID, payload);
+}
+
+export async function loadKillsState() {
+  return loadAppState(KILLS_STATE_ID);
+}
+
+export async function saveKillsState(payload) {
+  return saveAppState(KILLS_STATE_ID, payload);
 }
 
 async function supabaseRequest(path, options = {}) {

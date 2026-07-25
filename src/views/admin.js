@@ -80,6 +80,10 @@ function renderAdminPanel() {
             <span class="admin-nav-mark" aria-hidden="true"></span>
             Lista Negra
           </button>
+          <button class="admin-nav-item" type="button" data-admin-link="#/kills/admin">
+            <span class="admin-nav-mark" aria-hidden="true"></span>
+            Kills
+          </button>
         </nav>
 
         <div class="admin-sidebar-readout" id="adminSidebarReadout" aria-label="Resumen rapido"></div>
@@ -199,7 +203,8 @@ function initAdminPanel(main) {
     modalFooter: main.querySelector("#adminModalFooter"),
     syncStatus: main.querySelector("[data-admin-sync-status]"),
     toastStack: main.querySelector("#adminToastStack"),
-    navButtons: Array.from(main.querySelectorAll("[data-admin-view]"))
+    navButtons: Array.from(main.querySelectorAll("[data-admin-view]")),
+    navLinks: Array.from(main.querySelectorAll("[data-admin-link]"))
   };
 
   bindEvents();
@@ -218,6 +223,12 @@ function initAdminPanel(main) {
       button.addEventListener("click", () => {
         state.currentView = button.dataset.adminView;
         render();
+      }, { signal });
+    });
+
+    els.navLinks.forEach((button) => {
+      button.addEventListener("click", () => {
+        window.location.hash = button.dataset.adminLink;
       }, { signal });
     });
 

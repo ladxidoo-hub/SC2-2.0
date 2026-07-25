@@ -31,7 +31,7 @@ El workflow `.github/workflows/deploy.yml` instala dependencias, ejecuta `npm ru
 
 ## Supabase
 
-El panel Admin, la biblioteca de guias y el gestor de eventos usan Supabase como almacenamiento remoto mediante `src/services/supabaseStore.js`.
+El panel Admin, la biblioteca de guias, el gestor de eventos y Kill del Mes usan Supabase como almacenamiento remoto mediante `src/services/supabaseStore.js`.
 
 Antes de usarlo en produccion, abre Supabase SQL Editor y ejecuta:
 
@@ -39,16 +39,19 @@ Antes de usarlo en produccion, abre Supabase SQL Editor y ejecuta:
 -- supabase/schema.sql
 ```
 
-La tabla `app_state` guarda tres documentos publicos de la app:
+La tabla `app_state` guarda documentos publicos de la app:
 
 - `corp-command`: miembros, alters, EX-CORP y lista negra.
 - `guides-library`: guias.
 - `community-events`: miembros de eventos, eventos y participaciones.
+- `monthly-kills`: reportes de kills, ranking mensual, historial y perfiles de jugadores.
 
 El gestor de eventos guarda `members`, `events` y `participations` por separado. Los contadores de Mineria e Industria, PvE, PvP, total general, ultima participacion e historial de cada miembro se calculan desde `participations`, por lo que al editar o eliminar un evento las estadisticas se actualizan sin duplicar datos. Esta estructura deja espacio para puntos, rankings, filtros por fecha, reportes mensuales/anuales, roles de usuario y exportacion a Excel o PDF.
 
 En Eventos, la consulta de participacion es publica y de solo lectura. Crear, editar, eliminar, iniciar, finalizar y gestionar participantes requiere desbloquear la sesion Admin con el flujo existente.
 
 Las fechas de eventos se guardan internamente en UTC ISO 8601. El formulario de administracion toma la fecha/hora local del navegador y la convierte a UTC antes de guardar; al visualizar, cada usuario ve la hora convertida automaticamente a su zona horaria local con un contador regresivo en vivo.
+
+Kill del Mes esta integrado como modulo nativo en `#/kills`. La administracion reutiliza el desbloqueo Admin existente y el OCR de imagenes se ejecuta del lado del navegador con Tesseract, cargandose bajo demanda al subir un reporte.
 
 La clave publishable es publica y puede vivir en el frontend. No subas claves secretas ni claves de servicio al repositorio.
