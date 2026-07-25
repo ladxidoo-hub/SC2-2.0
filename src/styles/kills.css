@@ -632,11 +632,15 @@ body[data-route="kills"] {
   position: fixed;
   inset: 0;
   z-index: 100;
-  display: grid;
+  display: none;
   place-items: center;
   padding: 18px;
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(8px);
+}
+
+.kills-modal[open] {
+  display: grid;
 }
 
 .kills-modal-shell {
