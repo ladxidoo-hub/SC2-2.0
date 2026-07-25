@@ -1469,7 +1469,8 @@ export function initKills({ main, anchor }) {
       for (const target of targets) {
         try {
           const result = await engine.recognize(target.source, "eng", {
-            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]/:-,. ISKisk%<>|& aeiouAEIOU"
+            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789[]/:-,. ISKisk%<>|& aeiouAEIOU",
+            ...(target.options || {})
           });
           regions.push(`OCR_REGION_${target.name.toUpperCase()}\n${result?.data?.text || ""}`);
         } catch (error) {
@@ -1503,6 +1504,11 @@ export function initKills({ main, anchor }) {
       }
 
       return [
+        {
+          name: "victim_line",
+          source: createOcrCropCanvas(image, { x: 0.24, y: 0.162, width: 0.15, height: 0.056, scale: 3 }),
+          options: { tessedit_pageseg_mode: "7" }
+        },
         { name: "top", source: createOcrCropCanvas(image, { x: 0.16, y: 0.05, width: 0.68, height: 0.33 }) },
         { name: "participants", source: createOcrCropCanvas(image, { x: 0.16, y: 0.36, width: 0.36, height: 0.46 }) },
         { name: "victim", source: createOcrCropCanvas(image, { x: 0.20, y: 0.11, width: 0.33, height: 0.20 }) },
@@ -1519,7 +1525,7 @@ export function initKills({ main, anchor }) {
     const sourceY = Math.round(image.naturalHeight * region.y);
     const sourceWidth = Math.round(image.naturalWidth * region.width);
     const sourceHeight = Math.round(image.naturalHeight * region.height);
-    const scale = 2;
+    const scale = region.scale || 2;
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, sourceWidth * scale);
     canvas.height = Math.max(1, sourceHeight * scale);
@@ -1678,7 +1684,8 @@ export function initKills({ main, anchor }) {
           name,
           line: line.text,
           region: line.region,
-          index: line.index
+          index: line.index,
+          confidence: parsed.confidence
         });
       }
     }
@@ -1687,6 +1694,20 @@ export function initKills({ main, anchor }) {
   }
 
   function parseTaggedNameFromLine(line, region = "full") {
+    if (region === "victim_line") {
+      const compactLine = line.replace(/\s+/g, "");
+      const compactBroken = compactLine.match(/\[?([A-Z0-9]{3,4})([A-ZJIl][A-Za-z0-9]{2,34})/);
+
+      if (compactBroken) {
+        return {
+          tag: compactBroken[1],
+          name: compactBroken[2],
+          missingClose: true,
+          confidence: 0.86
+        };
+      }
+    }
+
     const normalTag = line.match(/\[\s*([A-Za-z0-9-]{2,8})\s*\]\s*([^\[\]\n\r]+)/);
     if (normalTag) {
       return { tag: normalTag[1], name: normalTag[2] };
@@ -1714,7 +1735,8 @@ export function initKills({ main, anchor }) {
 
   function findVictimCandidate(tagged, lines) {
     const participantIndex = lines.find((line) => /participantes?|participants?/i.test(line.text))?.index ?? Number.POSITIVE_INFINITY;
-    return tagged.find((item) => item.region === "victim")
+    return tagged.find((item) => item.region === "victim_line")
+      || tagged.find((item) => item.region === "victim")
       || findLooseVictimName(lines, participantIndex)
       || tagged.find((item) => item.region !== "participants" && item.index < participantIndex)
       || null;
@@ -1826,10 +1848,20 @@ export function initKills({ main, anchor }) {
   }
 
   function normalizeCorporationTag(value) {
-    return String(value || "")
+    const tag = String(value || "")
       .replace(/[^A-Za-z0-9-]/g, "")
       .toUpperCase()
       .slice(0, 8);
+
+    const corrections = {
+      RSEP: "RSCP",
+      R5EP: "RSCP",
+      RSFP: "RSCP",
+      RSCF: "RSCP",
+      RSEPI: "RSCP"
+    };
+
+    return corrections[tag] || tag;
   }
 
   function normalizePilotName(value, fromBrokenTag = false) {
@@ -1846,6 +1878,8 @@ export function initKills({ main, anchor }) {
       name = name.replace(/^[JIl](?=[A-Za-z0-9])/, "");
     }
     name = name.replace(/^J(?=[A-Z][a-z]+[0-9])/, "");
+    name = name.replace(/I(?=o)/g, "l");
+    name = name.replace(/HUK\b/g, "HuK");
     name = name.replace(/\s+\d{1,3}%?$/, "").trim();
 
     if (/^[a-z][a-z]+[A-Z]/.test(name)) {
