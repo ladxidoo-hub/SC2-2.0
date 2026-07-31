@@ -3,6 +3,10 @@ import { isSupabaseConfigured, loadEventsState, saveEventsState } from "../servi
 const STORAGE_KEY = "sc2.communityEvents.v1";
 const ADMIN_AUTH_KEY = "sc2.admin.unlocked";
 const COUNTDOWN_REFRESH_MS = 30 * 1000;
+const PILOT_FUZZY_MIN_LENGTH = 5;
+const PILOT_FUZZY_THRESHOLD = 0.9;
+const PILOT_SHORT_FUZZY_THRESHOLD = 0.88;
+const PILOT_ALIAS_DISPLAY_LIMIT = 4;
 
 const CATEGORIES = [
   {
@@ -495,6 +499,7 @@ export function initEvents({ main, anchor }) {
 
   function renderPublicParticipation() {
     const term = normalizeText(state.publicSearchTerm);
+    const searchKey = normalizePilotKey(state.publicSearchTerm);
 
     if (!state.members.length) {
       els.publicParticipationMount.innerHTML = renderPublicEmptyState(
@@ -512,9 +517,18 @@ export function initEvents({ main, anchor }) {
       return;
     }
 
-    const matches = getSortedMembers()
-      .filter((member) => normalizeText(member.name).includes(term))
-      .slice(0, 8);
+    const matches = getGroupedMembers()
+      .filter((group) => groupedMemberMatches(group, term, searchKey))
+      .map((group) => ({
+        group,
+        score: scoreGroupedMemberSearch(group, term, searchKey)
+      }))
+      .sort((left, right) => (
+        right.score - left.score
+        || left.group.name.localeCompare(right.group.name, "es", { sensitivity: "base" })
+      ))
+      .slice(0, 8)
+      .map((item) => item.group);
 
     if (!matches.length) {
       els.publicParticipationMount.innerHTML = renderPublicEmptyState(
@@ -524,7 +538,11 @@ export function initEvents({ main, anchor }) {
       return;
     }
 
-    const exactMatch = matches.find((member) => normalizeText(member.name) === term);
+    const exactMatch = matches.find((member) => (
+      (searchKey && member.keys.includes(searchKey))
+      || normalizeText(member.name) === term
+      || member.aliases.some((alias) => normalizeText(alias) === term)
+    ));
     const selectedMember = exactMatch || (matches.length === 1 ? matches[0] : null);
 
     if (selectedMember) {
@@ -534,7 +552,7 @@ export function initEvents({ main, anchor }) {
 
     els.publicParticipationMount.innerHTML = `
       <div class="events-public-match-copy">
-        <strong>${matches.length} coincidencias</strong>
+        <strong>${matches.length} coincidencias agrupadas</strong>
         <span>Afina la búsqueda para ver el historial completo de un piloto.</span>
       </div>
       <div class="events-public-match-grid">
@@ -544,8 +562,9 @@ export function initEvents({ main, anchor }) {
   }
 
   function renderPublicParticipationCard(member, compact = false) {
-    const stats = getMemberStats(member.uid);
-    const history = getMemberHistory(member.uid);
+    const stats = member.memberIds ? getGroupedMemberStats(member) : getMemberStats(member.uid);
+    const history = member.memberIds ? getGroupedMemberHistory(member) : getMemberHistory(member.uid);
+    const displayName = member.name || "Piloto";
     const last = history[0];
 
     return `
@@ -553,12 +572,13 @@ export function initEvents({ main, anchor }) {
         <div class="events-public-card-header">
           <div>
             <span class="events-kicker">Piloto</span>
-            <h3>${escapeHtml(member.name)}</h3>
+            <h3>${escapeHtml(displayName)}</h3>
+            ${renderPilotAliases(member)}
             <p>${last ? `Última participación: ${escapeHtml(formatDate(last.eventStartsAt))}` : "Sin participaciones registradas."}</p>
           </div>
         </div>
 
-        <div class="events-member-stats" aria-label="Participaciones acumuladas de ${escapeAttr(member.name)}">
+        <div class="events-member-stats" aria-label="Participaciones acumuladas de ${escapeAttr(displayName)}">
           ${renderMemberStat("Total acumulado", stats.total)}
           ${renderMemberStat("Minería e Industria", stats.mining)}
           ${renderMemberStat("PvE", stats.pve)}
@@ -567,6 +587,28 @@ export function initEvents({ main, anchor }) {
 
         ${compact ? "" : renderPublicHistory(history)}
       </article>
+    `;
+  }
+
+  function renderPilotAliases(member) {
+    if (!Array.isArray(member.aliases) || member.aliases.length < 2) {
+      return "";
+    }
+
+    const displayName = normalizeText(member.name);
+    const aliases = member.aliases
+      .filter((alias) => normalizeText(alias) !== displayName)
+      .slice(0, PILOT_ALIAS_DISPLAY_LIMIT);
+
+    if (!aliases.length) {
+      return "";
+    }
+
+    const extra = member.aliases.length - aliases.length - 1;
+    return `
+      <p class="events-public-aliases">
+        Agrupa variantes: ${escapeHtml(aliases.join(", "))}${extra > 0 ? ` +${extra}` : ""}
+      </p>
     `;
   }
 
@@ -694,6 +736,12 @@ export function initEvents({ main, anchor }) {
             </div>
           </div>
           <p>${escapeHtml(record.description || "Sin descripción.")}</p>
+          ${record.organizer ? `
+            <div class="events-organizer">
+              <span>Lider organizador</span>
+              <strong>${escapeHtml(record.organizer)}</strong>
+            </div>
+          ` : ""}
           <div class="events-participant-preview">
             <span>${record.participantIds.length} participantes</span>
             <strong>${escapeHtml(previewNames || "Aún sin miembros")}${extraCount ? ` +${extraCount}` : ""}</strong>
@@ -1033,6 +1081,10 @@ export function initEvents({ main, anchor }) {
             <label>Categoría</label>
             <input type="text" value="${escapeAttr(category.label)}" disabled>
           </div>
+          <div class="events-form-field">
+            <label for="eventsEventOrganizer">Lider organizador</label>
+            <input id="eventsEventOrganizer" name="organizer" type="text" value="${escapeAttr(record.organizer || "")}" placeholder="Nombre del lider o FC">
+          </div>
           <div class="events-form-field full">
             <label for="eventsEventDescription">Descripción</label>
             <textarea id="eventsEventDescription" name="description">${escapeHtml(record.description)}</textarea>
@@ -1057,6 +1109,7 @@ export function initEvents({ main, anchor }) {
     const formData = new FormData(form);
     const name = String(formData.get("name") || "").trim();
     const startsAtInput = String(formData.get("startsAt") || "").trim();
+    const organizer = String(formData.get("organizer") || "").trim();
     const description = String(formData.get("description") || "").trim();
     const startsAt = parseLocalDateTimeToUtc(startsAtInput);
 
@@ -1074,6 +1127,7 @@ export function initEvents({ main, anchor }) {
         category: form.dataset.category || getActiveCategory().id,
         name,
         startsAt,
+        organizer,
         description,
         participantIds: [...selectedParticipantIds]
       }
@@ -1116,6 +1170,10 @@ export function initEvents({ main, anchor }) {
           <div class="events-detail-block">
             <span>Participantes</span>
             <strong>${participants.length}</strong>
+          </div>
+          <div class="events-detail-block">
+            <span>Lider organizador</span>
+            <strong>${escapeHtml(record.organizer || "Sin lider asignado")}</strong>
           </div>
           <div class="events-detail-block full">
             <span>Descripción</span>
@@ -1416,6 +1474,7 @@ export function initEvents({ main, anchor }) {
       category: getActiveCategory().id,
       name: "",
       startsAt: "",
+      organizer: "",
       description: "",
       status: "planned",
       startedAt: "",
@@ -1484,6 +1543,216 @@ export function initEvents({ main, anchor }) {
       .sort((a, b) => new Date(b.eventStartsAt) - new Date(a.eventStartsAt));
   }
 
+  function getGroupedMembers() {
+    const groups = [];
+
+    for (const member of getSortedMembers()) {
+      const key = normalizePilotKey(member.name) || String(member.uid);
+      const group = findMatchingPilotGroup(groups, key);
+
+      if (group) {
+        mergeMemberIntoPilotGroup(group, member, key);
+        continue;
+      }
+
+      groups.push(createPilotGroup(member, key));
+    }
+
+    return groups;
+  }
+
+  function createPilotGroup(member, key) {
+    const group = {
+      uid: `pilot-group-${member.uid}`,
+      name: member.name,
+      members: [member],
+      memberIds: [member.uid],
+      keys: [key],
+      aliases: [member.name],
+      aliasCounts: []
+    };
+
+    trackPilotAlias(group, member.name);
+    return group;
+  }
+
+  function mergeMemberIntoPilotGroup(group, member, key) {
+    if (!group.memberIds.includes(member.uid)) {
+      group.members.push(member);
+      group.memberIds.push(member.uid);
+    }
+
+    if (key && !group.keys.includes(key)) {
+      group.keys.push(key);
+    }
+
+    if (!group.aliases.some((alias) => normalizeText(alias) === normalizeText(member.name))) {
+      group.aliases.push(member.name);
+    }
+
+    trackPilotAlias(group, member.name);
+    group.name = getPreferredPilotAlias(group);
+  }
+
+  function trackPilotAlias(group, name) {
+    const normalized = normalizeText(name);
+    const existing = group.aliasCounts.find((item) => item.normalized === normalized);
+
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+
+    group.aliasCounts.push({
+      normalized,
+      name,
+      count: 1,
+      order: group.aliasCounts.length
+    });
+  }
+
+  function getPreferredPilotAlias(group) {
+    const topCount = Math.max(...group.aliasCounts.map((item) => item.count));
+    const preferredAliases = new Set(
+      group.aliasCounts
+        .filter((item) => item.count === topCount)
+        .map((item) => item.normalized)
+    );
+
+    const preferredMember = [...group.members]
+      .filter((member) => preferredAliases.has(normalizeText(member.name)))
+      .sort((left, right) => {
+        const totalDiff = getMemberStats(right.uid).total - getMemberStats(left.uid).total;
+        const leftTime = new Date(left.createdAt || 0).getTime() || 0;
+        const rightTime = new Date(right.createdAt || 0).getTime() || 0;
+        return totalDiff || leftTime - rightTime || left.name.localeCompare(right.name, "es", { sensitivity: "base" });
+      })[0];
+
+    return preferredMember?.name || group.aliasCounts[0]?.name || group.name;
+  }
+
+  function findMatchingPilotGroup(groups, key) {
+    const exactMatch = groups.find((group) => group.keys.includes(key));
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    return groups.find((group) => group.keys.some((existingKey) => arePilotKeysSimilar(existingKey, key)));
+  }
+
+  function groupedMemberMatches(group, term, searchKey) {
+    if (!term && !searchKey) {
+      return true;
+    }
+
+    const keyMatch = searchKey && group.keys.some((key) => (
+      key.includes(searchKey)
+      || searchKey.includes(key)
+      || arePilotKeysSimilar(key, searchKey)
+    ));
+
+    if (keyMatch) {
+      return true;
+    }
+
+    return normalizeText([
+      group.name,
+      group.aliases.join(" "),
+      getGroupedMemberHistory(group).map((item) => item.eventName).join(" ")
+    ].join(" ")).includes(term);
+  }
+
+  function scoreGroupedMemberSearch(group, term, searchKey) {
+    let score = 0;
+
+    if (searchKey && group.keys.includes(searchKey)) {
+      score += 120;
+    } else if (searchKey && group.keys.some((key) => key.startsWith(searchKey))) {
+      score += 80;
+    } else if (searchKey && group.keys.some((key) => key.includes(searchKey))) {
+      score += 55;
+    } else if (searchKey && group.keys.some((key) => arePilotKeysSimilar(key, searchKey))) {
+      score += 45;
+    }
+
+    if (term && normalizeText(group.name) === term) {
+      score += 35;
+    } else if (term && normalizeText(group.name).startsWith(term)) {
+      score += 20;
+    }
+
+    score += Math.min(getGroupedMemberStats(group).total, 50);
+    return score;
+  }
+
+  function getGroupedMemberStats(group) {
+    return group.memberIds.reduce((stats, memberId) => {
+      const memberStats = getMemberStats(memberId);
+      stats.total += memberStats.total;
+      stats.mining += memberStats.mining;
+      stats.pve += memberStats.pve;
+      stats.pvp += memberStats.pvp;
+      return stats;
+    }, { total: 0, mining: 0, pve: 0, pvp: 0 });
+  }
+
+  function getGroupedMemberHistory(group) {
+    const seen = new Set();
+    return group.memberIds
+      .flatMap((memberId) => getMemberHistory(memberId))
+      .filter((item) => {
+        const key = item.uid || `${item.memberId}-${item.eventId}-${item.recordedAt}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => new Date(b.eventStartsAt) - new Date(a.eventStartsAt));
+  }
+
+  function normalizePilotKey(value) {
+    return normalizeText(value).replace(/[^\p{L}\p{N}]/gu, "");
+  }
+
+  function arePilotKeysSimilar(left, right) {
+    if (!left || !right || left === right) {
+      return left === right;
+    }
+
+    const shorterLength = Math.min(left.length, right.length);
+    const longerLength = Math.max(left.length, right.length);
+
+    if (shorterLength < PILOT_FUZZY_MIN_LENGTH) {
+      return false;
+    }
+
+    const distance = levenshteinDistance(left, right);
+    const similarity = 1 - (distance / longerLength);
+    const threshold = longerLength < 10 ? PILOT_SHORT_FUZZY_THRESHOLD : PILOT_FUZZY_THRESHOLD;
+
+    return similarity >= threshold;
+  }
+
+  function levenshteinDistance(left, right) {
+    const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+    for (let leftIndex = 0; leftIndex < left.length; leftIndex += 1) {
+      let previousDiagonal = previous[0];
+      previous[0] = leftIndex + 1;
+
+      for (let rightIndex = 0; rightIndex < right.length; rightIndex += 1) {
+        const insertCost = previous[rightIndex + 1] + 1;
+        const deleteCost = previous[rightIndex] + 1;
+        const replaceCost = previousDiagonal + (left[leftIndex] === right[rightIndex] ? 0 : 1);
+        previousDiagonal = previous[rightIndex + 1];
+        previous[rightIndex + 1] = Math.min(insertCost, deleteCost, replaceCost);
+      }
+    }
+
+    return previous[right.length];
+  }
+
   function getLastParticipation() {
     return [...state.participations].sort((a, b) => new Date(b.eventStartsAt) - new Date(a.eventStartsAt))[0] || null;
   }
@@ -1512,6 +1781,7 @@ export function initEvents({ main, anchor }) {
     const participantNames = record.participantIds.map(getMemberName).join(" ");
     return normalizeText([
       record.name,
+      record.organizer,
       record.description,
       CATEGORY_BY_ID[record.category]?.label,
       getEventStatusMeta(record).label,
@@ -1621,6 +1891,7 @@ export function initEvents({ main, anchor }) {
       category,
       name,
       startsAt,
+      organizer: stringFrom(raw.organizer, raw.leader, raw.lider, raw.fc, raw.commander),
       description: stringFrom(raw.description, raw.descripcion),
       status: normalizeEventStatus(raw.status || raw.estado),
       startedAt: normalizeDate(raw.startedAt || raw.iniciadoEn),
