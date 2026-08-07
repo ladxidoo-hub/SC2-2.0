@@ -151,10 +151,10 @@ export function renderHome() {
               <strong>Discord Timestamp</strong>
               <span>Generador de horarios para publicar tiempos exactos en Discord.</span>
             </a>
-            <a class="module-tile external-tool-tile" href="https://echoes.eveeye.com/?m=Pure%20Blind&o=nodeout_sec,node_sec,sub_npcs,sector_none,tag_none,etag_sig,con_none,thera,dark" target="_blank" rel="noopener noreferrer">
+            <a class="module-tile external-tool-tile" href="https://beta.echoes.mobi/" target="_blank" rel="noopener noreferrer">
               <span class="module-kicker">EXT-02</span>
-              <strong>EVE Echoes Eye</strong>
-              <span>Mapa tactico de Pure Blind para rutas, sistemas y lectura regional.</span>
+              <strong>Echoes Mobi</strong>
+              <span>Centro de herramientas para producir, equipar, gestionar habilidades, implantes, corporacion y killmails.</span>
             </a>
           </div>
         </div>
